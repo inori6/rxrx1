@@ -1,0 +1,106 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# =========================
+# Virtual environments
+# =========================
+.venv/
+venv/
+env/
+
+# =========================
+# Python tooling / cache
+# =========================
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# =========================
+# Jupyter
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# VS Code / IDE
+# =========================
+.vscode/
+.idea/
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================
+# RxRx1 raw / generated data
+# =========================
+data/raw/
+data/interim/
+data/processed/
+data/cache/
+
+# 保留 data/splits/
+# tiny/proxy/full split 的 CSV 如果较小且用于实验复现，建议提交 Git
+
+# =========================
+# Model checkpoints
+# =========================
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# =========================
+# Training outputs
+# =========================
+outputs/
+
+# =========================
+# Experiment artifacts
+# =========================
+experiments/*/checkpoints/
+experiments/*/logs/
+experiments/*/figures/
+
+# 如果 metrics/config/notes 很小，建议保留并提交
+# experiments/*/metrics.json
+# experiments/*/config.yaml
+# experiments/*/notes.md
+
+# =========================
+# Weights & Biases
+# =========================
+wandb/
+
+# =========================
+# TensorBoard
+# =========================
+runs/
+lightning_logs/
+
+# =========================
+# Temporary files
+# =========================
+*.tmp
+*.temp
+*.log
+*.bak
+*.swp
+
+# =========================
+# Kaggle / downloaded archives
+# =========================
+*.zip
+*.tar
+*.tar.gz
+*.7z
