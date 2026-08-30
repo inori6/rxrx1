@@ -104,3 +104,6 @@ lightning_logs/
 *.tar
 *.tar.gz
 *.7z
+
+#other
+PROJECT_STRUCTURE.md
