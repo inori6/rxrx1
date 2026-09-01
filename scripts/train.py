@@ -13,6 +13,7 @@ from rxrx1.models.resnet import build_resnet
 from rxrx1.training.trainer import train_one_epoch, validate_one_epoch
 from rxrx1.training.criterion import build_criterion
 from rxrx1.training.optimizers import build_optimizer
+from rxrx1.training.checkpoint import save_checkpoint
 from rxrx1.utils.paths import get_image_root
 from rxrx1.utils.seed import set_seed
 from rxrx1.utils.logger import setup_logger
@@ -33,12 +34,13 @@ def main():
     args = parse_args()
     config = load_config(args.config)
 
-    if config["logging"]["enabled"]:
-        logger_name = config["experiment"]["name"]
-        log_file = (Path(config["logging"]["log_dir"])
-                    / f"{config['experiment']['name']}.log")
-        log_level = config["logging"]["level"]
-        logger = setup_logger(logger_name, log_file, log_level)
+    logger_name = config["experiment"]["name"]
+    log_file = (
+        Path(config["logging"]["log_dir"])
+        / f"{config['experiment']['name']}.log"
+    )
+    log_level = config["logging"]["level"]
+    logger = setup_logger(logger_name, log_file, log_level)
 
     set_seed(config["experiment"]["seed"])
 
@@ -88,8 +90,15 @@ def main():
     ).to(device)
 
     criterion = build_criterion(config).to(device)
-
     optimizer = build_optimizer(model, config)
+
+    best_val_acc = float("-inf")
+
+    checkpoint_path = (
+        Path(config["checkpoint"]["dir"])
+        / config["experiment"]["name"]
+        / "best.pt"
+    )
 
     logger.info("Training started")
 
@@ -121,8 +130,24 @@ def main():
             val_acc,
         )
 
-    logger.info("Training finished")
+        if config["checkpoint"]["enabled"] and val_acc > best_val_acc:
+            best_val_acc = val_acc
 
+            save_checkpoint(
+                model=model,
+                optimizer=optimizer,
+                epoch=epoch + 1,
+                val_acc=val_acc,
+                path=checkpoint_path,
+            )
+
+            logger.info(
+                "Best checkpoint saved | epoch=%d | val_acc=%.4f",
+                epoch + 1,
+                val_acc,
+            )
+
+    logger.info("Training finished | best_val_acc=%.4f", best_val_acc)
 
 if __name__ == "__main__":
     main()

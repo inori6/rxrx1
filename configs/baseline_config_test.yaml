@@ -28,10 +28,14 @@ training:
   epochs: 5
 
 logging:
-  enabled: true
   level: INFO
   log_dir: outputs/logs
 
 wandb:
   enabled: false
   project: rxrx1
+
+checkpoint:
+  enabled: true
+  dir: outputs/checkpoints
+  monitor: val_acc
