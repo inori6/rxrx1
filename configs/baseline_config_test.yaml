@@ -41,4 +41,4 @@ wandb:
   enabled: true
   project: rxrx1
   mode: online
-  dir: outputs/wandb
+  dir: outputs
