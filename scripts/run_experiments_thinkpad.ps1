@@ -8,7 +8,7 @@
 # running the remaining experiments.
 # =============================================================================
 
-$ProjectRoot = "C:\rxrx1"
+$ProjectRoot = "C:\Users\chang\run_rxrx1_inpad\rxrx1"
 $Python = "$ProjectRoot\.venv\Scripts\python.exe"
 $TrainScript = "$ProjectRoot\scripts\train.py"
 
@@ -17,7 +17,10 @@ $TrainScript = "$ProjectRoot\scripts\train.py"
 # Experiments will run sequentially from top to bottom.
 # -----------------------------------------------------------------------------
 $configs = @(
-"configs/baseline_config_test.yaml"
+    "configs/image_size/resnet18_size384_seed42.yaml",
+    "configs/seed/resnet18_seed3407_size256.yaml",
+    "configs/seed/resnet18_seed2386_size256.yaml",
+    "configs/seed/resnet18_seed2026_size256.yaml"
 )
 
 Set-Location $ProjectRoot
