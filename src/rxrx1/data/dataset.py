@@ -114,6 +114,7 @@ class RxRxDataset(Dataset):
     def __getitem__(self, index: int):
         row = self.manifest.iloc[index]
         image = self._load_six_channels(row)
+        image = torch.from_numpy(image).permute(2, 0, 1).float()
 
         if self.transform is not None:
             image = self.transform(image)

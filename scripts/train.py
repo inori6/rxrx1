@@ -1,5 +1,6 @@
 from pathlib import Path
 import argparse
+from functools import partial
 
 import torch
 import torch.nn as nn
@@ -8,6 +9,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from rxrx1.data.dataset import RxRxDataset
+from rxrx1.data.transforms import resize_image
 from rxrx1.data.manifest import create_label_to_index, read_manifest
 from rxrx1.models.resnet import build_resnet
 from rxrx1.training.trainer import train_one_epoch, validate_one_epoch
@@ -61,15 +63,25 @@ def main():
     label_to_index = create_label_to_index(train_manifest)
     image_root = get_image_root("train")
 
+    input_size = config["data"]["image_size"]
+    if input_size != 512:
+        train_transform = partial(resize_image, size=input_size)
+        val_transform = partial(resize_image, size=input_size)
+    else:
+        train_transform = None
+        val_transform = None
+
     train_dataset = RxRxDataset(
         train_manifest,
         image_root,
         label_to_index,
+        transform=train_transform,
     )
     val_dataset = RxRxDataset(
         val_manifest,
         image_root,
         label_to_index,
+        transform=val_transform,
     )
 
     train_loader = DataLoader(
