@@ -11,10 +11,11 @@ from rxrx1.data.dataset import RxRxDataset
 from rxrx1.data.manifest import create_label_to_index, read_manifest
 from rxrx1.models.resnet import build_resnet
 from rxrx1.training.trainer import train_one_epoch, validate_one_epoch
-from rxrx1.utils.paths import get_image_root
-from rxrx1.utils.seed import set_seed
 from rxrx1.training.criterion import build_criterion
 from rxrx1.training.optimizers import build_optimizer
+from rxrx1.utils.paths import get_image_root
+from rxrx1.utils.seed import set_seed
+from rxrx1.utils.logger import setup_logger
 
 
 
@@ -31,6 +32,13 @@ def load_config(path):
 def main():
     args = parse_args()
     config = load_config(args.config)
+
+    if config["logging"]["enabled"]:
+        logger_name = config["experiment"]["name"]
+        log_file = (Path(config["logging"]["log_dir"])
+                    / f"{config['experiment']['name']}.log")
+        log_level = config["logging"]["level"]
+        logger = setup_logger(logger_name, log_file, log_level)
 
     set_seed(config["experiment"]["seed"])
 
@@ -83,6 +91,8 @@ def main():
 
     optimizer = build_optimizer(model, config)
 
+    logger.info("Training started")
+
     for epoch in tqdm(
         range(config["training"]["epochs"]),
         desc="Epoch",
@@ -101,13 +111,17 @@ def main():
             device,
         )
 
-        print(
-            f"Epoch {epoch + 1}: "
-            f"train_loss={train_loss:.4f}, "
-            f"train_acc={train_acc:.4f}, "
-            f"val_loss={val_loss:.4f}, "
-            f"val_acc={val_acc:.4f}"
+        logger.info(
+            "Epoch %d | train_loss=%.4f | train_acc=%.4f | "
+            "val_loss=%.4f | val_acc=%.4f",
+            epoch + 1,
+            train_loss,
+            train_acc,
+            val_loss,
+            val_acc,
         )
+
+    logger.info("Training finished")
 
 
 if __name__ == "__main__":
