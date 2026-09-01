@@ -17,6 +17,7 @@ from rxrx1.training.checkpoint import save_checkpoint
 from rxrx1.utils.paths import get_image_root
 from rxrx1.utils.seed import set_seed
 from rxrx1.utils.logger import setup_logger
+from rxrx1.utils.tracking import setup_wandb
 
 
 
@@ -34,18 +35,21 @@ def main():
     args = parse_args()
     config = load_config(args.config)
 
+    set_seed(config["experiment"]["seed"])
+
+    project_root = Path(__file__).resolve().parents[1]
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     logger_name = config["experiment"]["name"]
     log_file = (
-        Path(config["logging"]["log_dir"])
+        project_root
+        / config["logging"]["log_dir"]
         / f"{config['experiment']['name']}.log"
     )
     log_level = config["logging"]["level"]
     logger = setup_logger(logger_name, log_file, log_level)
 
-    set_seed(config["experiment"]["seed"])
-
-    project_root = Path(__file__).resolve().parents[1]
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    run = setup_wandb(config, project_root)
 
     train_manifest = read_manifest(
         project_root / config["data"]["train_manifest"]
@@ -95,12 +99,18 @@ def main():
     best_val_acc = float("-inf")
 
     checkpoint_path = (
-        Path(config["checkpoint"]["dir"])
+        project_root
+        / config["checkpoint"]["dir"]
         / config["experiment"]["name"]
         / "best.pt"
     )
 
-    logger.info("Training started")
+    logger.info(
+        "Training started | device=%s | train_samples=%d | val_samples=%d",
+        device,
+        len(train_dataset),
+        len(val_dataset),
+    )
 
     for epoch in tqdm(
         range(config["training"]["epochs"]),
@@ -130,24 +140,44 @@ def main():
             val_acc,
         )
 
-        if config["checkpoint"]["enabled"] and val_acc > best_val_acc:
+        if run is not None:
+            run.log(
+                {
+                    "epoch": epoch + 1,
+                    "train/loss": train_loss,
+                    "train/acc": train_acc,
+                    "val/loss": val_loss,
+                    "val/acc": val_acc,
+                }
+            )
+
+        if val_acc > best_val_acc:
             best_val_acc = val_acc
 
-            save_checkpoint(
-                model=model,
-                optimizer=optimizer,
-                epoch=epoch + 1,
-                val_acc=val_acc,
-                path=checkpoint_path,
-            )
+            if config["checkpoint"]["enabled"]:
+                save_checkpoint(
+                    model=model,
+                    optimizer=optimizer,
+                    epoch=epoch + 1,
+                    val_acc=val_acc,
+                    path=checkpoint_path,
+                )
 
-            logger.info(
-                "Best checkpoint saved | epoch=%d | val_acc=%.4f",
-                epoch + 1,
-                val_acc,
-            )
+                logger.info(
+                    "Best checkpoint saved | epoch=%d | val_acc=%.4f",
+                    epoch + 1,
+                    val_acc,
+                )
 
-    logger.info("Training finished | best_val_acc=%.4f", best_val_acc)
+    logger.info(
+        "Training finished | best_val_acc=%.4f",
+        best_val_acc,
+    )
+
+    if run is not None:
+        run.summary["best_val_acc"] = best_val_acc
+        run.finish()
+
 
 if __name__ == "__main__":
     main()
