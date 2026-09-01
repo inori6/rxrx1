@@ -1,0 +1,37 @@
+experiment:
+  name: resnet18_baseline
+  seed: 42
+
+data:
+  train_manifest: data/processed/splits/d1_train_treatment.csv
+  val_manifest: data/processed/splits/d1_val_treatment.csv
+
+  batch_size: 32
+  num_workers: 4
+
+  shuffle_train: true
+  shuffle_val: false
+
+model:
+  name: resnet18
+  pretrained: true
+
+loss:
+  name: cross_entropy
+
+optimizer:
+  name: adamw
+  lr: 0.0001
+  weight_decay: 0.0001
+
+training:
+  epochs: 5
+
+logging:
+  enabled: true
+  level: INFO
+  log_dir: outputs/logs
+
+wandb:
+  enabled: false
+  project: rxrx1
