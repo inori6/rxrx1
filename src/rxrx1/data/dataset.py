@@ -51,6 +51,15 @@ class RxRxDataset(Dataset):
         if validate_paths:
             self._validate_all_paths()
 
+        labels = set(self.manifest["sirna"].unique())
+        unknown_labels = labels - set(self.label_to_index)
+
+        if unknown_labels:
+            raise ValueError(
+                f"Manifest contains {len(unknown_labels)} labels "
+                "not present in label_to_index."
+            )
+
     def __len__(self):
         return len(self.manifest)
 

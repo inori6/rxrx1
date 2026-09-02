@@ -60,6 +60,35 @@ def main():
         project_root / config["data"]["val_manifest"]
     )
 
+    train_labels = set(train_manifest["sirna"].unique())
+    original_val_labels = set(val_manifest["sirna"].unique())
+
+    val_manifest = (
+        val_manifest[val_manifest["sirna"].isin(train_labels)]
+        .copy()
+        .reset_index(drop=True)
+    )
+
+    val_labels = set(val_manifest["sirna"].unique())
+
+    if train_labels != val_labels:
+        raise ValueError(
+            "Train/val label mismatch after filtering | "
+            f"train={len(train_labels)} | "
+            f"val={len(val_labels)} | "
+            f"train_only={len(train_labels - val_labels)} | "
+            f"val_only={len(val_labels - train_labels)}"
+        )
+
+    logger.info(
+        "Label check passed | train_labels=%d | "
+        "original_val_labels=%d | val_labels=%d | removed_val_labels=%d",
+        len(train_labels),
+        len(original_val_labels),
+        len(val_labels),
+        len(original_val_labels - val_labels),
+    )
+
     label_to_index = create_label_to_index(train_manifest)
     image_root = get_image_root("train")
 
@@ -83,7 +112,6 @@ def main():
         label_to_index,
         transform=val_transform,
     )
-
     train_loader = DataLoader(
         train_dataset,
         batch_size=config["data"]["batch_size"],
@@ -124,9 +152,20 @@ def main():
         len(val_dataset),
     )
 
+    best_val_acc = float("-inf")
+    best_epoch = 0
+    best_train_loss = None
+    best_train_acc = None
+    best_val_loss = None
+
+    final_train_loss = None
+    final_train_acc = None
+    final_val_loss = None
+    final_val_acc = None
+
     for epoch in tqdm(
-        range(config["training"]["epochs"]),
-        desc="Epoch",
+            range(config["training"]["epochs"]),
+            desc="Epoch",
     ):
         train_loss, train_acc = train_one_epoch(
             model,
@@ -163,7 +202,16 @@ def main():
                 }
             )
 
+        final_train_loss = train_loss
+        final_train_acc = train_acc
+        final_val_loss = val_loss
+        final_val_acc = val_acc
+
         if val_acc > best_val_acc:
+            best_epoch = epoch + 1
+            best_train_loss = train_loss
+            best_train_acc = train_acc
+            best_val_loss = val_loss
             best_val_acc = val_acc
 
             if config["checkpoint"]["enabled"]:
@@ -176,18 +224,42 @@ def main():
                 )
 
                 logger.info(
-                    "Best checkpoint saved | epoch=%d | val_acc=%.4f",
-                    epoch + 1,
-                    val_acc,
+                    "Best checkpoint saved | epoch=%d | "
+                    "val_acc=%.4f | val_loss=%.4f",
+                    best_epoch,
+                    best_val_acc,
+                    best_val_loss,
                 )
 
     logger.info(
-        "Training finished | best_val_acc=%.4f",
+        "Training finished | "
+        "final_train_acc=%.4f | final_train_loss=%.4f | "
+        "final_val_acc=%.4f | final_val_loss=%.4f | "
+        "best_epoch=%d | best_train_acc=%.4f | best_train_loss=%.4f | "
+        "best_val_acc=%.4f | best_val_loss=%.4f",
+        final_train_acc,
+        final_train_loss,
+        final_val_acc,
+        final_val_loss,
+        best_epoch,
+        best_train_acc,
+        best_train_loss,
         best_val_acc,
+        best_val_loss,
     )
 
     if run is not None:
+        run.summary["final_train_acc"] = final_train_acc
+        run.summary["final_train_loss"] = final_train_loss
+        run.summary["final_val_acc"] = final_val_acc
+        run.summary["final_val_loss"] = final_val_loss
+
+        run.summary["best_epoch"] = best_epoch
+        run.summary["best_train_acc"] = best_train_acc
+        run.summary["best_train_loss"] = best_train_loss
         run.summary["best_val_acc"] = best_val_acc
+        run.summary["best_val_loss"] = best_val_loss
+
         run.finish()
 
 
