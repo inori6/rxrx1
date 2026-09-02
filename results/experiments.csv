@@ -1,9 +1,9 @@
-experiment_id,experiment_name,experiment_group,model,seed,image_size,batch_size,epochs,optimizer,final_train_acc,final_train_loss,final_val_acc,final_val_loss,best_epoch,best_train_acc,best_train_loss,best_val_acc,best_val_loss,runtime_seconds,runtime_minutes,note
-exp001,resnet18_seed0_size256,seed,resnet18,0,256,32,5,adamw,0.9806,2.6313,0.0213,5.6588,4,0.9144,3.5154,0.0262,5.6918,2076,34.60,seed comparison
-exp002,resnet18_seed42_size256,seed,resnet18,42,256,32,5,adamw,0.9911,2.6493,0.0244,5.6385,4,0.9350,3.5056,0.0269,5.6584,2074,34.57,seed comparison; reference seed
-exp003,resnet18_seed2026_size256,seed,resnet18,2026,256,32,5,adamw,0.9819,2.7393,0.0200,5.6487,4,0.8958,3.6189,0.0213,5.6625,1757,29.28,seed comparison
-exp004,resnet18_seed2386_size256,seed,resnet18,2386,256,32,5,adamw,0.9869,2.6812,0.0200,5.6579,4,0.9164,3.5621,0.0225,5.6621,1757,29.28,seed comparison
-exp005,resnet18_seed3407_size256,seed,resnet18,3407,256,32,5,adamw,0.9914,2.6330,0.0238,5.6625,4,0.9231,3.4887,0.0275,5.6698,1739,28.98,best seed result at size256
-exp006,resnet18_size128_seed42,image_size,resnet18,42,128,32,3,adamw,0.7333,3.7538,0.0112,5.9074,3,0.7333,3.7538,0.0112,5.9074,496,8.27,image size comparison
-exp007,resnet18_size384_seed42,image_size,resnet18,42,384,32,3,adamw,0.3053,4.8804,0.0300,5.6221,3,0.3053,4.8804,0.0300,5.6221,1905,31.75,image size comparison
-exp008,resnet18_size512_seed42,image_size,resnet18,42,512,32,3,adamw,0.1317,5.1755,0.0325,5.5571,3,0.1317,5.1755,0.0325,5.5571,4288,71.47,best image size result
+experiment_id,experiment_name,experiment_group,model,seed,image_size,batch_size,epochs,optimizer,final_train_acc,final_train_loss,final_val_acc,final_val_loss,best_epoch,best_train_acc,best_train_loss,best_val_acc,best_val_loss,runtime_seconds,runtime_minutes,runtime_per_epoch_minutes,note
+exp001,resnet18_seed0_size256,seed,resnet18,0,256,32,5,adamw,0.9806,2.6313,0.0213,5.6588,4,0.9144,3.5154,0.0262,5.6918,2076,34.60,6.92,seed comparison
+exp002,resnet18_seed42_size256,seed,resnet18,42,256,32,5,adamw,0.9911,2.6493,0.0244,5.6385,4,0.9350,3.5056,0.0269,5.6584,2074,34.57,6.91,seed comparison; reference seed
+exp003,resnet18_seed2026_size256,seed,resnet18,2026,256,32,5,adamw,0.9819,2.7393,0.0200,5.6487,4,0.8958,3.6189,0.0213,5.6625,1757,29.28,5.86,seed comparison
+exp004,resnet18_seed2386_size256,seed,resnet18,2386,256,32,5,adamw,0.9869,2.6812,0.0200,5.6579,4,0.9164,3.5621,0.0225,5.6621,1757,29.28,5.86,seed comparison
+exp005,resnet18_seed3407_size256,seed,resnet18,3407,256,32,5,adamw,0.9914,2.6330,0.0238,5.6625,4,0.9231,3.4887,0.0275,5.6698,1739,28.98,5.80,best seed result at size256
+exp006,resnet18_size128_seed42,image_size,resnet18,42,128,32,3,adamw,0.7333,3.7538,0.0112,5.9074,3,0.7333,3.7538,0.0112,5.9074,496,8.27,2.76,image size comparison
+exp007,resnet18_size384_seed42,image_size,resnet18,42,384,32,3,adamw,0.3053,4.8804,0.0300,5.6221,3,0.3053,4.8804,0.0300,5.6221,1905,31.75,10.58,image size comparison
+exp008,resnet18_size512_seed42,image_size,resnet18,42,512,32,3,adamw,0.1317,5.1755,0.0325,5.5571,3,0.1317,5.1755,0.0325,5.5571,4288,71.47,23.82,best image size result
