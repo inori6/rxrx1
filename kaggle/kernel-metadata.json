@@ -8,8 +8,8 @@
   "enable_gpu": true,
   "enable_internet": true,
   "dataset_sources": [
-    "inori6/rxrx1-processed-splits"
-  ],
+  "inori6/rxrx1-wandb-secret"
+],
   "competition_sources": [
     "recursion-cellular-image-classification"
   ]
