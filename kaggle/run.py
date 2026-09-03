@@ -4,7 +4,12 @@ import shutil
 import subprocess
 import sys
 import time
+import torch
 
+print("GPU:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU")
+print("PyTorch:", torch.__version__)
+print("CUDA:", torch.version.cuda)
+print("cuDNN:", torch.backends.cudnn.version())
 
 REPO_URL = "https://github.com/inori6/rxrx1.git"
 GIT_REF = "experiment/convergence"
