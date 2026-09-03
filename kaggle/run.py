@@ -3,7 +3,16 @@ import subprocess
 import sys
 import time
 
-
+'''
+检查以下内容
+git status
+git log -1 --oneline
+git push
+GIT_REF = "experiment/augmentation"
+CONFIGS 路径都真实存在
+yaml参数
+kernel-metadata.json
+'''
 REPO_URL = "https://github.com/inori6/rxrx1.git"
 
 # 可以写：
