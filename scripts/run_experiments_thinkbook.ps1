@@ -17,10 +17,7 @@ $TrainScript = "$ProjectRoot\scripts\train.py"
 # Experiments will run sequentially from top to bottom.
 # -----------------------------------------------------------------------------
 $configs = @(
-    "configs/image_size/resnet18_size512_seed42.yaml",
-    "configs/seed/resnet18_seed42_size256.yaml",
-    "configs/seed/resnet18_seed0_size256.yaml",
-    "configs/image_size/resnet18_size128_seed42.yaml"
+    "configs/efficientnet/efficientnetb2_10epoch.yaml"
 )
 
 Set-Location $ProjectRoot

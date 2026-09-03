@@ -109,3 +109,5 @@ lightning_logs/
 PROJECT_STRUCTURE.md
 */.stfolder/
 /transform_samples.yaml
+/results/analysis/
+configs/test.yaml

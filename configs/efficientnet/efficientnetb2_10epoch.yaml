@@ -1,0 +1,44 @@
+experiment:
+  name: efficientnetb2_10epoch
+  seed: 0
+
+data:
+  train_manifest: data/processed/splits/d1_train_treatment.csv
+  val_manifest: data/processed/splits/d1_val_treatment.csv
+  batch_size: 16
+  num_workers: 4
+  shuffle_train: true
+  shuffle_val: false
+  image_size: 384
+
+model:
+  name: efficientnet_b2
+  pretrained: true
+
+loss:
+  name: cross_entropy
+
+transform: null
+
+optimizer:
+  name: adamw
+  lr: 0.0001
+  weight_decay: 0.0001
+
+training:
+  epochs: 10
+
+logging:
+  level: INFO
+  log_dir: outputs/logs
+
+checkpoint:
+  enabled: true
+  dir: outputs/checkpoints
+  monitor: val_acc
+
+wandb:
+  enabled: true
+  project: rxrx1
+  mode: online
+  dir: outputs

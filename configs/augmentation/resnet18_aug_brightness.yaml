@@ -1,0 +1,111 @@
+experiment:
+  name: resnet18_aug_brightness
+  seed: 0
+
+data:
+  train_manifest: data/processed/splits/d1_train_treatment.csv
+  val_manifest: data/processed/splits/d1_val_treatment.csv
+
+  batch_size: 8
+  num_workers: 0
+
+  shuffle_train: true
+  shuffle_val: false
+  image_size: 384
+
+transform:
+  compute_norm_stats: false
+
+  train:
+    - name: random_resized_crop
+      size: 384
+      scale: [0.5, 1.0]
+      ratio: [1.0, 1.0]
+      interpolation: nearest
+
+    - name: horizontal_flip
+      p: 0.5
+
+    - name: vertical_flip
+      p: 0.5
+
+    - name: random_90_rotation
+      p: 1.0
+
+    - name: channel_intensity_jitter
+      scale_mean: 1.0
+      scale_std: 0.1
+      shift_mean: 0.0
+      shift_std: 0.1
+      p: 1.0
+
+    - name: brightness
+      factor_min: 0.9
+      factor_max: 1.1
+      p: 0.5
+
+    - name: normalize
+      mean:
+        - 4.354927292812018
+        - 14.884749266071085
+        - 8.328809833291135
+        - 8.103256018367814
+        - 3.3460083591790846
+        - 7.848295099705826
+      std:
+        - 6.941568911994198
+        - 14.466260982245927
+        - 5.7793993657024805
+        - 7.5830736353759525
+        - 4.198180229366412
+        - 6.186970025521604
+
+  val:
+    - name: resize
+      size: 384
+
+    - name: normalize
+      mean:
+        - 4.354927292812018
+        - 14.884749266071085
+        - 8.328809833291135
+        - 8.103256018367814
+        - 3.3460083591790846
+        - 7.848295099705826
+      std:
+        - 6.941568911994198
+        - 14.466260982245927
+        - 5.7793993657024805
+        - 7.5830736353759525
+        - 4.198180229366412
+        - 6.186970025521604
+
+model:
+  name: resnet18
+  pretrained: true
+
+loss:
+  name: cross_entropy
+
+optimizer:
+  name: adamw
+  lr: 0.0001
+  weight_decay: 0.0001
+
+training:
+  epochs: 5
+
+logging:
+  level: INFO
+  log_dir: outputs/logs
+
+checkpoint:
+  enabled: true
+  dir: outputs/checkpoints
+  monitor: val_acc
+
+wandb:
+  enabled: true
+  project: rxrx1
+  mode: online
+  dir: outputs

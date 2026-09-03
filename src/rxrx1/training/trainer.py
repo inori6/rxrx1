@@ -1,5 +1,16 @@
-import torch
+import time
+
 from tqdm import tqdm
+import torch
+from rxrx1.training.checkpoint import save_checkpoint
+from rxrx1.training.experiment import TrainingResults
+
+from rxrx1.utils.logger import (
+    log_epoch_result,
+    log_best_checkpoint,
+)
+
+from rxrx1.utils.tracking import log_wandb_epoch
 
 
 def train_one_epoch(model, loader, optimizer, criterion, device):
@@ -59,3 +70,144 @@ def validate_one_epoch(model, loader, criterion, device):
         )
 
     return total_loss / total_samples, total_correct / total_samples
+
+
+def fit_model(
+    model,
+    train_loader,
+    val_loader,
+    optimizer,
+    criterion,
+    device,
+    epochs,
+    checkpoint_enabled,
+    checkpoint_path,
+    logger,
+    run,
+):
+    if epochs <= 0:
+        raise ValueError(
+            f"epochs must be greater than 0, got {epochs}"
+        )
+
+    results = TrainingResults()
+
+    epoch_runtimes = []
+
+    for epoch in tqdm(
+        range(epochs),
+        desc="Epoch",
+    ):
+        epoch_number = epoch + 1
+
+        epoch_start_time = time.perf_counter()
+
+        # ========================================
+        # Train
+        # ========================================
+
+        train_loss, train_acc = train_one_epoch(
+            model,
+            train_loader,
+            optimizer,
+            criterion,
+            device,
+        )
+
+        # ========================================
+        # Validation
+        # ========================================
+
+        val_loss, val_acc = validate_one_epoch(
+            model,
+            val_loader,
+            criterion,
+            device,
+        )
+
+        # ========================================
+        # Runtime
+        # ========================================
+
+        epoch_runtime_seconds = (
+            time.perf_counter()
+            - epoch_start_time
+        )
+
+        epoch_runtime_minutes = (
+            epoch_runtime_seconds / 60
+        )
+
+        epoch_runtimes.append(
+            epoch_runtime_seconds
+        )
+
+        # ========================================
+        # Results
+        # ========================================
+
+        is_best = results.update_epoch(
+            epoch=epoch_number,
+            train_loss=train_loss,
+            train_acc=train_acc,
+            val_loss=val_loss,
+            val_acc=val_acc,
+        )
+
+        # ========================================
+        # Logger
+        # ========================================
+
+        log_epoch_result(
+            logger=logger,
+            epoch=epoch_number,
+            train_loss=train_loss,
+            train_acc=train_acc,
+            val_loss=val_loss,
+            val_acc=val_acc,
+            runtime_minutes=epoch_runtime_minutes,
+        )
+
+        # ========================================
+        # W&B
+        # ========================================
+
+        log_wandb_epoch(
+            run=run,
+            epoch=epoch_number,
+            train_loss=train_loss,
+            train_acc=train_acc,
+            val_loss=val_loss,
+            val_acc=val_acc,
+            runtime_minutes=epoch_runtime_minutes,
+        )
+
+        # ========================================
+        # Checkpoint
+        # ========================================
+
+        if is_best and checkpoint_enabled:
+            save_checkpoint(
+                model=model,
+                optimizer=optimizer,
+                epoch=epoch_number,
+                val_acc=val_acc,
+                path=checkpoint_path,
+            )
+
+            log_best_checkpoint(
+                logger=logger,
+                epoch=epoch_number,
+                val_acc=val_acc,
+                val_loss=val_loss,
+            )
+
+    # ========================================
+    # Runtime summary
+    # ========================================
+
+    results.set_runtime(
+        epoch_runtimes
+    )
+
+    return results
