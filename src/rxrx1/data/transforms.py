@@ -503,428 +503,6 @@ def get_interpolation_mode(
 
 
 # ============================================================
-# Image-level transform builder
-# ============================================================
-
-
-def build_transform(
-    transform_config: list[dict],
-    norm_mean: list[float] | None = None,
-    norm_std: list[float] | None = None,
-):
-    pipeline = []
-
-    for config in transform_config:
-        name = config["name"]
-
-        # ----------------------------------------------------
-        # Resize
-        # ----------------------------------------------------
-
-        if name == "resize":
-            size = config["size"]
-
-            interpolation = get_interpolation_mode(
-                config.get(
-                    "interpolation",
-                    "bilinear",
-                )
-            )
-
-            pipeline.append(
-                transforms.Resize(
-                    (size, size),
-                    interpolation=interpolation,
-                )
-            )
-
-        # ----------------------------------------------------
-        # RandomResizedCrop
-        # ----------------------------------------------------
-
-        elif name in {
-            "random_resized_crop",
-            "crop",
-        }:
-            pipeline.append(
-                transforms.RandomResizedCrop(
-                    size=config["size"],
-                    scale=tuple(
-                        config.get(
-                            "scale",
-                            [0.5, 1.0],
-                        )
-                    ),
-                    ratio=tuple(
-                        config.get(
-                            "ratio",
-                            [1.0, 1.0],
-                        )
-                    ),
-                    interpolation=get_interpolation_mode(
-                        config.get(
-                            "interpolation",
-                            "nearest",
-                        )
-                    ),
-                )
-            )
-
-        # ----------------------------------------------------
-        # Flip
-        # ----------------------------------------------------
-
-        elif name == "horizontal_flip":
-            pipeline.append(
-                transforms.RandomHorizontalFlip(
-                    p=config.get(
-                        "p",
-                        0.5,
-                    )
-                )
-            )
-
-        elif name == "vertical_flip":
-            pipeline.append(
-                transforms.RandomVerticalFlip(
-                    p=config.get(
-                        "p",
-                        0.5,
-                    )
-                )
-            )
-
-        # ----------------------------------------------------
-        # Exact 90-degree rotation
-        # ----------------------------------------------------
-
-        elif name == "random_90_rotation":
-            pipeline.append(
-                Random90Rotation(
-                    p=config.get(
-                        "p",
-                        1.0,
-                    )
-                )
-            )
-
-        # ----------------------------------------------------
-        # Continuous rotation
-        # Kept only for optional experiments.
-        # ----------------------------------------------------
-
-        elif name == "rotation":
-            pipeline.append(
-                transforms.RandomRotation(
-                    degrees=config.get(
-                        "degrees",
-                        15,
-                    ),
-                    interpolation=get_interpolation_mode(
-                        config.get(
-                            "interpolation",
-                            "bilinear",
-                        )
-                    ),
-                )
-            )
-
-        # ----------------------------------------------------
-        # Affine
-        # ----------------------------------------------------
-
-        elif name == "affine":
-            pipeline.append(
-                transforms.RandomAffine(
-                    degrees=config.get(
-                        "degrees",
-                        10,
-                    ),
-                    translate=tuple(
-                        config.get(
-                            "translate",
-                            [0.05, 0.05],
-                        )
-                    ),
-                    scale=tuple(
-                        config.get(
-                            "scale",
-                            [0.95, 1.05],
-                        )
-                    ),
-                    shear=config.get(
-                        "shear",
-                        5,
-                    ),
-                )
-            )
-
-        # ----------------------------------------------------
-        # Winner-style per-channel intensity jitter
-        # x'_c = a_c x_c + b_c
-        # ----------------------------------------------------
-
-        elif name == "channel_intensity_jitter":
-
-            pipeline.append(
-
-                ChannelIntensityJitter(
-
-                    scale_mean=config.get("scale_mean", 1.0),
-
-                    scale_std=config.get("scale_std", 0.1),
-
-                    shift_mean=config.get("shift_mean", 0.0),
-
-                    shift_std=config.get("shift_std", 0.1),
-
-                    p=config.get("p", 1.0),
-
-                )
-
-            )
-        # ----------------------------------------------------
-        # Brightness
-        # ----------------------------------------------------
-
-        elif name == "brightness":
-            pipeline.append(
-                RandomBrightness(
-                    factor_min=config.get(
-                        "factor_min",
-                        0.9,
-                    ),
-                    factor_max=config.get(
-                        "factor_max",
-                        1.1,
-                    ),
-                    p=config.get(
-                        "p",
-                        0.5,
-                    ),
-                )
-            )
-
-        # ----------------------------------------------------
-        # Contrast
-        # ----------------------------------------------------
-
-        elif name == "contrast":
-            pipeline.append(
-                RandomContrast(
-                    factor_min=config.get(
-                        "factor_min",
-                        0.9,
-                    ),
-                    factor_max=config.get(
-                        "factor_max",
-                        1.1,
-                    ),
-                    p=config.get(
-                        "p",
-                        0.5,
-                    ),
-                )
-            )
-
-        # ----------------------------------------------------
-        # Gaussian noise
-        # ----------------------------------------------------
-
-        elif name == "gaussian_noise":
-            pipeline.append(
-                GaussianNoise(
-                    std=config.get(
-                        "std",
-                        0.01,
-                    ),
-                    p=config.get(
-                        "p",
-                        0.5,
-                    ),
-                )
-            )
-
-        # ----------------------------------------------------
-        # Gaussian blur
-        # ----------------------------------------------------
-
-        elif name == "gaussian_blur":
-            pipeline.append(
-                transforms.RandomApply(
-                    [
-                        transforms.GaussianBlur(
-                            kernel_size=config.get(
-                                "kernel_size",
-                                3,
-                            ),
-                            sigma=tuple(
-                                config.get(
-                                    "sigma",
-                                    [0.1, 1.0],
-                                )
-                            ),
-                        )
-                    ],
-                    p=config.get(
-                        "p",
-                        0.5,
-                    ),
-                )
-            )
-
-        # ----------------------------------------------------
-        # Legacy intensity transforms
-        # ----------------------------------------------------
-
-        elif name == "global_intensity_scale":
-            pipeline.append(
-                GlobalIntensityScale(
-                    scale_min=config.get(
-                        "scale_min",
-                        0.9,
-                    ),
-                    scale_max=config.get(
-                        "scale_max",
-                        1.1,
-                    ),
-                    p=config.get(
-                        "p",
-                        0.5,
-                    ),
-                )
-            )
-
-        elif name == "channel_intensity_scale":
-            pipeline.append(
-                ChannelIntensityScale(
-                    scale_min=config.get(
-                        "scale_min",
-                        0.9,
-                    ),
-                    scale_max=config.get(
-                        "scale_max",
-                        1.1,
-                    ),
-                    p=config.get(
-                        "p",
-                        0.5,
-                    ),
-                )
-            )
-
-        elif name == "gamma":
-            pipeline.append(
-                RandomGamma(
-                    gamma_min=config.get(
-                        "gamma_min",
-                        0.9,
-                    ),
-                    gamma_max=config.get(
-                        "gamma_max",
-                        1.1,
-                    ),
-                    p=config.get(
-                        "p",
-                        0.5,
-                    ),
-                )
-            )
-
-        # ----------------------------------------------------
-        # Channel dropout
-        # ----------------------------------------------------
-
-        elif name == "channel_dropout":
-            pipeline.append(
-                ChannelDropout(
-                    p=config.get(
-                        "p",
-                        0.2,
-                    ),
-                    max_channels=config.get(
-                        "max_channels",
-                        1,
-                    ),
-                )
-            )
-
-        # ----------------------------------------------------
-        # Random erasing
-        # ----------------------------------------------------
-
-        elif name == "random_erasing":
-            pipeline.append(
-                transforms.RandomErasing(
-                    p=config.get(
-                        "p",
-                        0.25,
-                    ),
-                    scale=tuple(
-                        config.get(
-                            "scale",
-                            [0.02, 0.15],
-                        )
-                    ),
-                    ratio=tuple(
-                        config.get(
-                            "ratio",
-                            [0.5, 2.0],
-                        )
-                    ),
-                    value=config.get(
-                        "value",
-                        0,
-                    ),
-                )
-            )
-
-        # ----------------------------------------------------
-        # Normalize
-        # ----------------------------------------------------
-
-        elif name == "normalize":
-            if (
-                norm_mean is None
-                or norm_std is None
-            ):
-                raise ValueError(
-                    "Normalization requires "
-                    "norm_mean and norm_std."
-                )
-
-            pipeline.append(
-                transforms.Normalize(
-                    mean=norm_mean,
-                    std=norm_std,
-                )
-            )
-
-        # ----------------------------------------------------
-        # Batch-level augmentation
-        # ----------------------------------------------------
-
-        elif name in {
-            "mixup",
-            "cutmix",
-        }:
-            raise ValueError(
-                f"{name} is a batch-level augmentation. "
-                "Use build_batch_transform() instead of "
-                "build_transform()."
-            )
-
-        else:
-            raise ValueError(
-                f"Unknown transform: {name}"
-            )
-
-    return transforms.Compose(
-        pipeline
-    )
-
-
-# ============================================================
 # Batch-level augmentation
 # MixUp / CutMix
 # ============================================================
@@ -1243,72 +821,252 @@ def build_batch_transform(
         pipeline
     )
 
-def prepare_transforms(
-    config,
-    train_manifest,
-    image_root,
-    label_to_index,
-    logger,
-):
-    """Build dataset transforms according to the transform.switch setting."""
+SIZE_TRANSFORMS = {
+    "resize",
+    "random_resized_crop",
+    "crop",
+    "center_crop",
+}
+
+
+def build_transform(transform_config: list[dict]):
+    pipeline = []
+
+    for config in transform_config:
+        name = str(config["name"]).lower()
+
+        # Resize
+        if name == "resize":
+            size = config["size"]
+            interpolation = get_interpolation_mode(
+                config.get("interpolation", "bilinear")
+            )
+            pipeline.append(
+                transforms.Resize(
+                    (size, size),
+                    interpolation=interpolation,
+                )
+            )
+
+        # Random resized crop
+        elif name in {"random_resized_crop", "crop"}:
+            pipeline.append(
+                transforms.RandomResizedCrop(
+                    size=config["size"],
+                    scale=tuple(config.get("scale", [0.5, 1.0])),
+                    ratio=tuple(config.get("ratio", [1.0, 1.0])),
+                    interpolation=get_interpolation_mode(
+                        config.get("interpolation", "nearest")
+                    ),
+                )
+            )
+
+        # Center crop
+        elif name == "center_crop":
+            pipeline.append(
+                transforms.CenterCrop(
+                    size=config["size"]
+                )
+            )
+
+        # Flip
+        elif name == "horizontal_flip":
+            pipeline.append(
+                transforms.RandomHorizontalFlip(
+                    p=config.get("p", 0.5)
+                )
+            )
+
+        elif name == "vertical_flip":
+            pipeline.append(
+                transforms.RandomVerticalFlip(
+                    p=config.get("p", 0.5)
+                )
+            )
+
+        # Exact 90-degree rotation
+        elif name == "random_90_rotation":
+            pipeline.append(
+                Random90Rotation(
+                    p=config.get("p", 1.0)
+                )
+            )
+
+        # Continuous rotation
+        elif name == "rotation":
+            pipeline.append(
+                transforms.RandomRotation(
+                    degrees=config.get("degrees", 15),
+                    interpolation=get_interpolation_mode(
+                        config.get("interpolation", "bilinear")
+                    ),
+                )
+            )
+
+        # Affine
+        elif name == "affine":
+            pipeline.append(
+                transforms.RandomAffine(
+                    degrees=config.get("degrees", 10),
+                    translate=tuple(config.get("translate", [0.05, 0.05])),
+                    scale=tuple(config.get("scale", [0.95, 1.05])),
+                    shear=config.get("shear", 5),
+                )
+            )
+
+        # Winner-style per-channel intensity jitter
+        elif name == "channel_intensity_jitter":
+            pipeline.append(
+                ChannelIntensityJitter(
+                    scale_mean=config.get("scale_mean", 1.0),
+                    scale_std=config.get("scale_std", 0.1),
+                    shift_mean=config.get("shift_mean", 0.0),
+                    shift_std=config.get("shift_std", 0.1),
+                    p=config.get("p", 1.0),
+                )
+            )
+
+        # Brightness
+        elif name == "brightness":
+            pipeline.append(
+                RandomBrightness(
+                    factor_min=config.get("factor_min", 0.9),
+                    factor_max=config.get("factor_max", 1.1),
+                    p=config.get("p", 0.5),
+                )
+            )
+
+        # Contrast
+        elif name == "contrast":
+            pipeline.append(
+                RandomContrast(
+                    factor_min=config.get("factor_min", 0.9),
+                    factor_max=config.get("factor_max", 1.1),
+                    p=config.get("p", 0.5),
+                )
+            )
+
+        # Gaussian noise
+        elif name == "gaussian_noise":
+            pipeline.append(
+                GaussianNoise(
+                    std=config.get("std", 0.01),
+                    p=config.get("p", 0.5),
+                )
+            )
+
+        # Gaussian blur
+        elif name == "gaussian_blur":
+            pipeline.append(
+                transforms.RandomApply(
+                    [
+                        transforms.GaussianBlur(
+                            kernel_size=config.get("kernel_size", 3),
+                            sigma=tuple(config.get("sigma", [0.1, 1.0])),
+                        )
+                    ],
+                    p=config.get("p", 0.5),
+                )
+            )
+
+        # Legacy intensity transforms
+        elif name == "global_intensity_scale":
+            pipeline.append(
+                GlobalIntensityScale(
+                    scale_min=config.get("scale_min", 0.9),
+                    scale_max=config.get("scale_max", 1.1),
+                    p=config.get("p", 0.5),
+                )
+            )
+
+        elif name == "channel_intensity_scale":
+            pipeline.append(
+                ChannelIntensityScale(
+                    scale_min=config.get("scale_min", 0.9),
+                    scale_max=config.get("scale_max", 1.1),
+                    p=config.get("p", 0.5),
+                )
+            )
+
+        elif name == "gamma":
+            pipeline.append(
+                RandomGamma(
+                    gamma_min=config.get("gamma_min", 0.9),
+                    gamma_max=config.get("gamma_max", 1.1),
+                    p=config.get("p", 0.5),
+                )
+            )
+
+        # Channel dropout
+        elif name == "channel_dropout":
+            pipeline.append(
+                ChannelDropout(
+                    p=config.get("p", 0.2),
+                    max_channels=config.get("max_channels", 1),
+                )
+            )
+
+        # Random erasing
+        elif name == "random_erasing":
+            pipeline.append(
+                transforms.RandomErasing(
+                    p=config.get("p", 0.25),
+                    scale=tuple(config.get("scale", [0.02, 0.15])),
+                    ratio=tuple(config.get("ratio", [0.5, 2.0])),
+                    value=config.get("value", 0),
+                )
+            )
+
+        # Batch-level augmentation
+        elif name in {"mixup", "cutmix"}:
+            raise ValueError(
+                f"{name} is a batch-level augmentation. "
+                "Use build_batch_transform() instead of build_transform()."
+            )
+
+        else:
+            raise ValueError(f"Unknown transform: {name}")
+
+    return transforms.Compose(pipeline)
+
+
+def resolve_transform_config(
+    transform_config: list[dict],
+    image_size: int,
+) -> list[dict]:
+    resolved = []
+
+    for config in transform_config:
+        config = config.copy()
+        name = str(config.get("name", "")).lower()
+
+        if name in SIZE_TRANSFORMS:
+            config.setdefault("size", image_size)
+
+        resolved.append(config)
+
+    return resolved
+
+
+def prepare_transforms(config):
+    """Build image transforms using data.image_size as the default size."""
     transform_config = config.get("transform") or {}
 
     if not transform_config.get("switch", False):
-        return None, None, None, None
+        return None, None
 
-    train_transform = build_transform(transform_config.get("train", []))
-    val_transform = build_transform(transform_config.get("val", []))
+    image_size = config["data"]["image_size"]
 
-    norm_mean = None
-    norm_std = None
+    train_config = resolve_transform_config(
+        transform_config.get("train", []),
+        image_size,
+    )
+    val_config = resolve_transform_config(
+        transform_config.get("val", []),
+        image_size,
+    )
 
-    if transform_config.get("compute_norm_stats", False):
-        stats_transform = build_transform(
-            [
-                {
-                    "name": "Resize",
-                    "size": config["data"]["image_size"],
-                },
-                {"name": "ToTensor"},
-            ]
-        )
-
-        stats_dataset = RxRxDataset(
-            manifest=train_manifest,
-            image_root=image_root,
-            label_to_index=label_to_index,
-            transform=stats_transform,
-        )
-
-        norm_mean, norm_std = compute_channel_stats(
-            stats_dataset,
-            batch_size=config["data"]["batch_size"],
-            num_workers=config["data"]["num_workers"],
-        )
-
-        logger.info("Computed normalization mean: %s", norm_mean)
-        logger.info("Computed normalization std: %s", norm_std)
-    else:
-        normalize_config = next(
-            (
-                transform
-                for transform in transform_config.get("train", [])
-                if str(transform.get("name", "")).lower() == "normalize"
-            ),
-            None,
-        )
-
-        if normalize_config is not None:
-            norm_mean = normalize_config.get("mean")
-            norm_std = normalize_config.get("std")
-
-            if norm_mean is None or norm_std is None:
-                raise ValueError(
-                    "Normalize transform exists, but mean/std "
-                    "is missing from YAML."
-                )
-
-            logger.info("Using YAML normalization mean: %s", norm_mean)
-            logger.info("Using YAML normalization std: %s", norm_std)
-
-    return train_transform, val_transform, norm_mean, norm_std
+    return (
+        build_transform(train_config),
+        build_transform(val_config),
+    )

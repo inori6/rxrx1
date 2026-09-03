@@ -12,17 +12,19 @@ class RxRxDataset(Dataset):
     """Load one six-channel RxRx1 site from a manifest row."""
 
     def __init__(
-        self,
-        manifest: pd.DataFrame,
-        image_root: str | Path,
-        label_to_index: dict,
-        transform: Optional[Callable] = None,
-        validate_paths: bool = False,
+            self,
+            manifest: pd.DataFrame,
+            image_root: str | Path,
+            label_to_index: dict,
+            transform: Optional[Callable] = None,
+            normalizer: Optional[Callable] = None,
+            validate_paths: bool = False,
     ):
         self.manifest = manifest.copy().reset_index(drop=True)
         self.image_root = Path(image_root)
         self.label_to_index = label_to_index
         self.transform = transform
+        self.normalizer = normalizer
 
         required_columns = {
             "experiment",
@@ -129,7 +131,11 @@ class RxRxDataset(Dataset):
         if self.transform is not None:
             image = self.transform(image)
 
+        if self.normalizer is not None:
+            image = self.normalizer(image, row)
+
         label = self.label_to_index[row["sirna"]]
+
 
         return {
             "image": image,
