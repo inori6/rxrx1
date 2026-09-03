@@ -129,6 +129,7 @@ def run_experiment(config_path):
 
 def setup_secrets():
     os.environ["WANDB_API_KEY"] = UserSecretsClient().get_secret("WANDB_API_KEY")
+    print("WANDB_API_KEY loaded:", bool(os.environ.get("WANDB_API_KEY")))
 
 
 def main():
@@ -137,17 +138,15 @@ def main():
     print("=" * 80)
 
     setup_secrets()
+    clone_repo()
+    checkout_git_ref()
+    install_project()
 
     print(f"Repository : {REPO_URL}")
     print(f"Git ref    : {GIT_REF}")
     print(f"Experiments: {len(CONFIGS)}")
 
-    clone_repo()
-    checkout_git_ref()
-    install_project()
-
     results = []
-
     total_start = time.time()
 
     for i, config_path in enumerate(CONFIGS, start=1):
