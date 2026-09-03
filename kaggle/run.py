@@ -1,28 +1,23 @@
 from pathlib import Path
+import os
 import shutil
 import subprocess
 import sys
 import time
-import os
-from kaggle_secrets import UserSecretsClient
 
 
 REPO_URL = "https://github.com/inori6/rxrx1.git"
-
-# 可以写：
-# "master"
-# "experiment/augmentation"
-# "v1.0"
-# "a1b2c3d4..."
-
-
 GIT_REF = "experiment/convergence"
 
 WORK_DIR = Path("/kaggle/working")
 PROJECT_DIR = WORK_DIR / "rxrx1"
 
+WANDB_KEY_PATH = Path(
+    "/kaggle/input/rxrx1-wandb-secret/wandb_api_key.txt"
+)
+
 CONFIGS = [
-    "configs/convergence/efficientnet_b2_30e.yaml"
+    "configs/convergence/efficientnet_b2_30e.yaml",
 ]
 
 
@@ -40,7 +35,28 @@ def run_command(command, cwd=None, check=True):
     )
 
 
+def setup_secrets():
+    if not WANDB_KEY_PATH.exists():
+        raise FileNotFoundError(
+            f"W&B API key file not found: {WANDB_KEY_PATH}"
+        )
+
+    key = WANDB_KEY_PATH.read_text(
+        encoding="utf-8"
+    ).strip()
+
+    if not key:
+        raise RuntimeError("W&B API key file is empty.")
+
+    os.environ["WANDB_API_KEY"] = key
+    print("WANDB_API_KEY loaded: True")
+
+
 def clone_repo():
+    if PROJECT_DIR.exists():
+        print(f"Removing existing project directory: {PROJECT_DIR}")
+        shutil.rmtree(PROJECT_DIR)
+
     run_command(
         [
             "git",
@@ -64,7 +80,6 @@ def checkout_git_ref():
         cwd=PROJECT_DIR,
     )
 
-    # 打印真正运行的 commit
     run_command(
         [
             "git",
@@ -73,7 +88,6 @@ def checkout_git_ref():
         ],
         cwd=PROJECT_DIR,
     )
-
 
 
 def install_project():
@@ -129,11 +143,6 @@ def run_experiment(config_path):
     return success, runtime_minutes
 
 
-def setup_secrets():
-    os.environ["WANDB_API_KEY"] = UserSecretsClient().get_secret("WANDB_API_KEY")
-    print("WANDB_API_KEY loaded:", bool(os.environ.get("WANDB_API_KEY")))
-
-
 def main():
     print("=" * 80)
     print("RxRx1 Kaggle Experiment Runner")
@@ -159,11 +168,9 @@ def main():
 
         try:
             success, runtime = run_experiment(config_path)
-
         except Exception as exc:
             print(f"UNEXPECTED ERROR: {exc}")
             print("Continuing to next experiment...")
-
             success = False
             runtime = None
 
@@ -184,11 +191,11 @@ def main():
 
     for result in results:
         status = "SUCCESS" if result["success"] else "FAILED"
-
-        if result["runtime"] is None:
-            runtime = "N/A"
-        else:
-            runtime = f"{result['runtime']:.2f} min"
+        runtime = (
+            "N/A"
+            if result["runtime"] is None
+            else f"{result['runtime']:.2f} min"
+        )
 
         print(
             f"{status:8} | "

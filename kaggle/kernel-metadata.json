@@ -7,7 +7,9 @@
   "is_private": true,
   "enable_gpu": true,
   "enable_internet": true,
-  "dataset_sources": [],
+  "dataset_sources": [
+  "inori6/rxrx1-wandb-secret"
+],
   "competition_sources": [
     "recursion-cellular-image-classification"
   ]
