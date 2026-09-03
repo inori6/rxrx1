@@ -1,18 +1,12 @@
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import time
+import os
+from kaggle_secrets import UserSecretsClient
 
-'''
-检查以下内容
-git status
-git log -1 --oneline
-git push
-GIT_REF = "experiment/augmentation"
-CONFIGS 路径都真实存在
-yaml参数
-kernel-metadata.json
-'''
+
 REPO_URL = "https://github.com/inori6/rxrx1.git"
 
 # 可以写：
@@ -20,16 +14,15 @@ REPO_URL = "https://github.com/inori6/rxrx1.git"
 # "experiment/augmentation"
 # "v1.0"
 # "a1b2c3d4..."
-GIT_REF = "experiment/augmentation"
+
+
+GIT_REF = "experiment/convergence"
 
 WORK_DIR = Path("/kaggle/working")
 PROJECT_DIR = WORK_DIR / "rxrx1"
 
-
 CONFIGS = [
-    "configs/augmentation/efficientnet_b2_aug_backbone.yaml",
-    "configs/augmentation/efficientnet_b2_aug_brightness.yaml",
-    "configs/augmentation/efficientnet_b2_aug_contrast.yaml",
+    "configs/convergence/efficientnet_b2_30e.yaml"
 ]
 
 
@@ -80,6 +73,7 @@ def checkout_git_ref():
         ],
         cwd=PROJECT_DIR,
     )
+
 
 
 def install_project():
@@ -135,21 +129,26 @@ def run_experiment(config_path):
     return success, runtime_minutes
 
 
+def setup_secrets():
+    os.environ["WANDB_API_KEY"] = UserSecretsClient().get_secret("WANDB_API_KEY")
+    print("WANDB_API_KEY loaded:", bool(os.environ.get("WANDB_API_KEY")))
+
+
 def main():
     print("=" * 80)
     print("RxRx1 Kaggle Experiment Runner")
     print("=" * 80)
 
-    print(f"Repository : {REPO_URL}")
-    print(f"Git ref    : {GIT_REF}")
-    print(f"Experiments: {len(CONFIGS)}")
-
+    setup_secrets()
     clone_repo()
     checkout_git_ref()
     install_project()
 
-    results = []
+    print(f"Repository : {REPO_URL}")
+    print(f"Git ref    : {GIT_REF}")
+    print(f"Experiments: {len(CONFIGS)}")
 
+    results = []
     total_start = time.time()
 
     for i, config_path in enumerate(CONFIGS, start=1):

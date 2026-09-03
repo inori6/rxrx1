@@ -1,0 +1,42 @@
+{
+  "copy_mode": "original_png_bytes",
+  "fingerprint": "a23d40daac",
+  "image_size": 512,
+  "manifest_names": [
+    "D1/train_control",
+    "D1/train_treatment",
+    "D1/val_control",
+    "D1/val_treatment",
+    "D2/train_control",
+    "D2/train_treatment",
+    "D2/val_control",
+    "D2/val_treatment",
+    "D3/train_control",
+    "D3/train_treatment",
+    "D3/val_control",
+    "D3/val_treatment",
+    "D4/train_control",
+    "D4/train_treatment",
+    "D4/val_control",
+    "D4/val_treatment"
+  ],
+  "manifest_rows": {
+    "D1/train_control": 1118,
+    "D1/train_treatment": 3600,
+    "D1/val_control": 496,
+    "D1/val_treatment": 1600,
+    "D2/train_control": 992,
+    "D2/train_treatment": 3200,
+    "D2/val_control": 992,
+    "D2/val_treatment": 3200,
+    "D3/train_control": 496,
+    "D3/train_treatment": 4432,
+    "D3/val_control": 496,
+    "D3/val_treatment": 4432,
+    "D4/train_control": 496,
+    "D4/train_treatment": 4432,
+    "D4/val_control": 496,
+    "D4/val_treatment": 4432
+  },
+  "package_root": "/kaggle/working/rxrx1_original_512_a23d40daac"
+}
