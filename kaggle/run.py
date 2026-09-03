@@ -2,6 +2,8 @@ from pathlib import Path
 import subprocess
 import sys
 import time
+import os
+from kaggle_secrets import UserSecretsClient
 
 
 REPO_URL = "https://github.com/inori6/rxrx1.git"
@@ -11,16 +13,15 @@ REPO_URL = "https://github.com/inori6/rxrx1.git"
 # "experiment/augmentation"
 # "v1.0"
 # "a1b2c3d4..."
-GIT_REF = "experiment/augmentation"
+
+
+GIT_REF = "experiment/convergence"
 
 WORK_DIR = Path("/kaggle/working")
 PROJECT_DIR = WORK_DIR / "rxrx1"
 
-
 CONFIGS = [
-    "configs/augmentation/efficientnet_b2_aug_backbone.yaml",
-    "configs/augmentation/efficientnet_b2_aug_brightness.yaml",
-    "configs/augmentation/efficientnet_b2_aug_contrast.yaml",
+    "configs/convergence/efficientnet_b2_30e.yaml"
 ]
 
 
@@ -126,10 +127,16 @@ def run_experiment(config_path):
     return success, runtime_minutes
 
 
+def setup_secrets():
+    os.environ["WANDB_API_KEY"] = UserSecretsClient().get_secret("WANDB_API_KEY")
+
+
 def main():
     print("=" * 80)
     print("RxRx1 Kaggle Experiment Runner")
     print("=" * 80)
+
+    setup_secrets()
 
     print(f"Repository : {REPO_URL}")
     print(f"Git ref    : {GIT_REF}")

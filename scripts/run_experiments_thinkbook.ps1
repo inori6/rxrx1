@@ -17,7 +17,7 @@ $TrainScript = "$ProjectRoot\scripts\train.py"
 # Experiments will run sequentially from top to bottom.
 # -----------------------------------------------------------------------------
 $configs = @(
-    "configs/efficientnet/efficientnetb2_10epoch.yaml"
+    "configs/efficientnet/efficientnetb2_20epoch.yaml"
 )
 
 Set-Location $ProjectRoot
