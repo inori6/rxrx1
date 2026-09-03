@@ -1,0 +1,9 @@
+<model>_norm_src-<source>_pop-<population>_grp-<grouping>_sp-<spatial>_ch-<channel>_pos-<position>
+
+model：effb2、effb4、resnet18
+source：sample / ref
+population：n / p / np / train / trainctl
+grouping：global / exp / plate / lbatch
+spatial：global / pixel
+channel：shared / pc（per_channel）
+position：pre / post

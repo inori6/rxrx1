@@ -125,21 +125,152 @@ class RxRxDataset(Dataset):
     def __getitem__(self, index: int):
         row = self.manifest.iloc[index]
 
+        # ========================================================
+        # 1. Load raw six-channel image
+        # ========================================================
+
         image = self._load_six_channels(row)
-        image = torch.from_numpy(image).permute(2, 0, 1).float()
+
+        # HWC -> CHW
+        image = (
+            torch.from_numpy(image)
+            .permute(2, 0, 1)
+            .float()
+        )
+
+        # ========================================================
+        # 2. Resolve image-level normalization position
+        # ========================================================
+
+        normalizer_position = None
+
+        if self.normalizer is not None:
+
+            apply_to = getattr(
+                self.normalizer,
+                "apply_to",
+                "image",
+            )
+
+            if apply_to != "image":
+                raise ValueError(
+                    "RxRxDataset can only apply image-level normalizers. "
+                    f"Received normalizer.apply_to={apply_to!r}. "
+                    "Batch-level normalizers must be applied in the trainer."
+                )
+
+            normalizer_position = getattr(
+                self.normalizer,
+                "position",
+                "before_resize",
+            )
+
+            if normalizer_position not in {
+                "before_resize",
+                "after_resize",
+            }:
+                raise ValueError(
+                    "Unsupported normalization position: "
+                    f"{normalizer_position!r}."
+                )
+
+        # ========================================================
+        # 3. Normalization BEFORE resize
+        # ========================================================
+        #
+        # Current experiment:
+        #
+        # raw image
+        #     ↓
+        # normalization
+        #     ↓
+        # resize / augmentation
+        #
+
+        if (
+                self.normalizer is not None
+                and normalizer_position == "before_resize"
+        ):
+            image = self.normalizer(
+                image,
+                row,
+            )
+
+        # ========================================================
+        # 4. Transform pipeline
+        # ========================================================
+        #
+        # Currently this may include:
+        #
+        # resize
+        # flip
+        # rotation
+        # brightness
+        # ...
+        #
 
         if self.transform is not None:
             image = self.transform(image)
 
-        if self.normalizer is not None:
-            image = self.normalizer(image, row)
+        # ========================================================
+        # 5. after_resize is NOT applied here yet
+        # ========================================================
+        #
+        # Important:
+        #
+        # self.transform may contain BOTH resize and augmentation.
+        #
+        # Therefore doing:
+        #
+        #     transform(image)
+        #     normalization(image)
+        #
+        # would actually mean:
+        #
+        #     resize
+        #     augmentation
+        #     normalization
+        #
+        # which is NOT the intended:
+        #
+        #     resize
+        #     normalization
+        #     augmentation
+        #
+        # We deliberately reject it until resize and augmentation
+        # are separated in the transform pipeline.
+        #
 
-        label = self.label_to_index[row["sirna"]]
+        if (
+                self.normalizer is not None
+                and normalizer_position == "after_resize"
+        ):
+            raise NotImplementedError(
+                "normalization.position='after_resize' requires "
+                "the resize step to be separated from augmentation. "
+                "The current Dataset receives one combined transform, "
+                "so applying normalization here would incorrectly place "
+                "it after augmentation."
+            )
 
+        # ========================================================
+        # 6. Label
+        # ========================================================
+
+        label = self.label_to_index[
+            row["sirna"]
+        ]
+
+        # ========================================================
+        # 7. Return image + metadata
+        # ========================================================
 
         return {
             "image": image,
-            "label": torch.tensor(label, dtype=torch.long),
+            "label": torch.tensor(
+                label,
+                dtype=torch.long,
+            ),
             "experiment": row["experiment"],
             "cell_type": row["cell_type"],
             "plate": int(row["plate"]),

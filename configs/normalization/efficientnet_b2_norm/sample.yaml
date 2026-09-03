@@ -1,0 +1,58 @@
+normalization:
+  enabled: true
+
+  # z-score:
+  # x_norm = (x - mean) / (std + eps)
+  method: zscore
+
+  statistics:
+    # 使用一组 reference images 预先计算 mean/std
+    source: reference
+
+    # 跨 experiment / plate，
+    # 所有 NP control images 共用一套 statistics
+    grouping: plate
+
+    # 每个 channel 内，把所有 H×W pixels 一起统计
+    spatial: global
+
+    # 6 个 channel 分别计算 mean/std
+    #
+    # 最终：
+    # mean.shape = [6, 1, 1]
+    # std.shape  = [6, 1, 1]
+    channel: per_channel
+
+    # 使用 population std，ddof = 0
+    std_type: population
+
+  reference:
+    # N + P
+    # 即 negative control + positive control
+    population: NP
+
+    # train statistics 只由 train-side control 计算，
+    # val 使用同一套 train statistics
+    split_policy: train_only
+
+  application:
+    # 在 resize 和 augmentation 前 normalization
+    position: before_resize
+
+  # 防止 std = 0
+  eps: 1.0e-6
+
+  # 找不到对应 statistics 时直接报错
+  missing_group: error
+
+  cache:
+    # 已有相同 statistics 时直接读取
+    load: true
+
+    # 新计算的 mean/std + count + metadata 保存下来
+    save: true
+
+    dir: outputs/normalization_stats
+
+    # cache 不存在时自动重新计算
+    missing: compute

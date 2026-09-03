@@ -43,6 +43,20 @@ def load_config(path):
         return yaml.safe_load(f)
 
 
+def split_normalizer_by_scope(normalizer):
+    """Route a normalizer to Dataset or to the loader-batch training hook."""
+
+    if normalizer is None:
+        return None, None
+
+    apply_to = getattr(normalizer, "apply_to", "image")
+    if apply_to == "image":
+        return normalizer, None
+    if apply_to == "batch":
+        return None, normalizer
+    raise ValueError(f"Unknown normalizer apply_to scope: {apply_to!r}.")
+
+
 def main():
     args = parse_args()
     config = load_config(args.config)
@@ -75,22 +89,83 @@ def main():
         image_root = get_image_root("train")
 
         train_transform, val_transform = prepare_transforms(config)
-        train_normalizer = build_normalizer(config, split="train", project_root=project_root, logger=logger)
-        val_normalizer = build_normalizer(config, split="val", project_root=project_root, logger=logger)
+        train_normalizer = build_normalizer(
+            config,
+            split="train",
+            project_root=project_root,
+            logger=logger,
+        )
+
+        normalization_config = (
+                config.get("normalization")
+                or {}
+        )
+
+        reference_config = (
+                normalization_config.get("reference")
+                or {}
+        )
+
+        train_reference_stats = getattr(
+            train_normalizer,
+            "stats",
+            None,
+        )
+
+        split_policy = str(
+            reference_config.get(
+                "split_policy",
+                "train_only",
+            )
+        ).lower()
+
+        # train_only:
+        #     val directly needs train global stats
+        #
+        # all:
+        #     val needs train global stats + val stats
+        #
+        # val_only:
+        #     val does not need train stats
+        share_train_stats_with_val = (
+                train_reference_stats is not None
+                and split_policy in {
+                    "train_only",
+                    "all",
+                }
+        )
+
+        val_normalizer = build_normalizer(
+            config,
+            stats=(
+                train_reference_stats
+                if share_train_stats_with_val
+                else None
+            ),
+            split="val",
+            project_root=project_root,
+            logger=logger,
+        )
+        train_image_normalizer, train_batch_normalizer = split_normalizer_by_scope(
+            train_normalizer
+        )
+        val_image_normalizer, val_batch_normalizer = split_normalizer_by_scope(
+            val_normalizer
+        )
 
         train_dataset = RxRxDataset(
             train_manifest,
             image_root,
             label_to_index,
             transform=train_transform,
-            normalizer=train_normalizer,
+            normalizer=train_image_normalizer,
         )
         val_dataset = RxRxDataset(
             val_manifest,
             image_root,
             label_to_index,
             transform=val_transform,
-            normalizer=val_normalizer,
+            normalizer=val_image_normalizer,
         )
 
         train_loader = DataLoader(
@@ -138,6 +213,8 @@ def main():
             checkpoint_path=checkpoint_path,
             logger=logger,
             run=run,
+            train_batch_normalizer=train_batch_normalizer,
+            val_batch_normalizer=val_batch_normalizer,
         )
 
         log_training_finished(logger, results)
@@ -151,3 +228,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

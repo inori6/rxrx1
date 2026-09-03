@@ -1,0 +1,113 @@
+experiment:
+  name: effb2_norm_src-reference_pop-np_grp-plate_sp-global_ch-pc_pos-pre
+  seed: 0
+
+data:
+  train_manifest: data/processed/splits/d1_train_treatment.csv
+  val_manifest: data/processed/splits/d1_val_treatment.csv
+
+  train_control_manifest: data/processed/splits/d1_train_control.csv
+  val_control_manifest: data/processed/splits/d1_val_control.csv
+
+  batch_size: 32
+  num_workers: 4
+
+  shuffle_train: true
+  shuffle_val: false
+
+  image_size: 384
+
+model:
+  name: efficientnet_b2
+  pretrained: true
+
+loss:
+  name: cross_entropy
+
+transform:
+  switch: true
+
+  train:
+    - name: resize
+
+  val:
+    - name: resize
+
+normalization:
+  enabled: true
+
+  # z = (x - mean) / (std + eps)
+  method: zscore
+
+  statistics:
+    # mean/std 来自一组 reference images
+    source: reference
+
+    # 每个 experiment + plate 单独计算一套 statistics
+    grouping: plate
+
+    # 每个 channel 内，对所有 H×W pixels 一起统计
+    spatial: global
+
+    # 6 个 channel 分别计算
+    #
+    # mean.shape = [6, 1, 1]
+    # std.shape  = [6, 1, 1]
+    channel: per_channel
+
+    # ddof = 0
+    std_type: population
+
+  reference:
+    # N + P controls
+    population: NP
+
+    # train 和 val 都使用 train-side reference statistics
+    split_policy: train_only
+
+  application:
+    # raw image
+    #   -> normalization
+    #   -> resize
+    #   -> augmentation
+    position: before_resize
+
+  eps: 1.0e-6
+
+  # treatment image 找不到对应 plate statistics 时直接报错
+  missing_group: error
+
+  cache:
+    # 如果 statistics 已存在则直接读取
+    load: true
+
+    # 新计算的 mean/std/count/metadata 保存下来
+    save: true
+
+    dir: outputs/normalization_stats
+
+    # cache 不存在或不兼容时重新计算
+    missing: compute
+
+optimizer:
+  name: adamw
+  lr: 0.0001
+  weight_decay: 0.0001
+
+training:
+  epochs: 20
+
+logging:
+  level: INFO
+  log_dir: outputs/logs
+
+checkpoint:
+  enabled: true
+  dir: outputs/checkpoints
+  monitor: val_acc
+
+wandb:
+  enabled: true
+  project: rxrx1
+  mode: online
+  dir: outputs

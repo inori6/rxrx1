@@ -1,0 +1,303 @@
+# ============================================================
+# Normalization configuration
+# ============================================================
+
+normalization:
+
+  # ----------------------------------------------------------
+  # 是否启用 normalization
+  # ----------------------------------------------------------
+  # false:
+  #   不进行任何 normalization
+  #
+  # true:
+  #   按下面的配置构建 normalizer
+  enabled: true
+
+
+  # ----------------------------------------------------------
+  # normalization 使用的数学公式
+  # ----------------------------------------------------------
+  # zscore:
+  #   x_norm = (x - mean) / (std + eps)
+  #
+  # control_correction:
+  #   预留给之后设计的显式 control / batch-effect correction
+  #   目前先不实现，等 z-score 实验完成后再定义公式
+  method: zscore
+
+
+  # ==========================================================
+  # Statistics
+  # 决定 mean / std 怎么计算
+  # ==========================================================
+  statistics:
+
+    # --------------------------------------------------------
+    # mean / std 从哪里来
+    # --------------------------------------------------------
+    # sample:
+    #   当前 image 自己计算 mean/std
+    #
+    #   例如第一名：
+    #       source: sample
+    #       spatial: global
+    #       channel: per_channel
+    #
+    # reference:
+    #   使用一组 reference images 预先计算 mean/std
+    #
+    #   例如：
+    #       untreated controls
+    #       positive controls
+    #       train
+    #       train + controls
+    source: reference
+
+
+    # --------------------------------------------------------
+    # reference statistics 按哪个 group / scope 分开计算
+    # --------------------------------------------------------
+    # 只有 source: reference 时有意义
+    #
+    # global:
+    #   所有 reference images 共用一套 mean/std
+    #
+    # experiment:
+    #   每个 experiment 单独计算一套 mean/std
+    #
+    # plate:
+    #   每个 experiment + plate 单独计算一套 mean/std
+    #
+    # loader_batch:
+    #   对 DataLoader 当前 mini-batch 内的 images
+    #   临时计算一套 mean/std。
+    #
+    #   例如 batch_size = 32 时：
+    #       当前 32 张 image -> mean/std -> normalize 当前 32 张
+    #
+    #   下一批 32 张会重新计算新的 mean/std。
+    #
+    #   注意：
+    #   loader_batch 与 RxRx1 的 biological / experimental
+    #   batch effect 完全不是同一个概念。
+    #
+    #   这个模式主要用于：
+    #       - 测试 batch-wise normalization
+    #       - 未来其他项目复用
+    #       - 与 BatchNorm 类似的 batch-level statistics 实验
+    #
+    #   loader_batch statistics 是动态计算的，
+    #   通常不会像 global / experiment / plate 那样
+    #   预先 fit 并保存。
+    #
+    # 可选：
+    #   global
+    #   experiment
+    #   plate
+    #   loader_batch
+    grouping: plate
+
+
+    # --------------------------------------------------------
+    # spatial dimension 怎么聚合
+    # --------------------------------------------------------
+    # global:
+    #   H × W 的所有 pixel 一起统计
+    #
+    # pixel:
+    #   每个固定 (h, w) 位置分别统计
+    #
+    # global + shared:
+    #   mean/std shape = [1, 1, 1]
+    #
+    # global + per_channel:
+    #   mean/std shape = [C, 1, 1]
+    #
+    # pixel + shared:
+    #   mean/std shape = [1, H, W]
+    #
+    # pixel + per_channel:
+    #   mean/std shape = [C, H, W]
+    spatial: global
+
+
+    # --------------------------------------------------------
+    # 6 个 fluorescence channels 怎么处理
+    # --------------------------------------------------------
+    # shared:
+    #   6 channels 放在一起估计 statistics
+    #   所有 channel 共用 mean/std
+    #
+    # per_channel:
+    #   每个 channel 分别估计 mean/std
+    #
+    # 这对应我们要测试的假设：
+    #
+    # shared:
+    #   technical effect 在 6 channels 上近似共享
+    #
+    # per_channel:
+    #   technical effect / intensity distribution
+    #   具有 channel dependency
+    channel: per_channel
+
+
+    # --------------------------------------------------------
+    # 标准差定义
+    # --------------------------------------------------------
+    # population:
+    #   使用 population standard deviation
+    #
+    #       variance = sum((x - mean)^2) / N
+    #
+    #   即 correction / ddof = 0
+    #
+    # sample:
+    #   除以 N-1
+    #
+    # normalization 中推荐 population，
+    # 因为 reference set 就是我们实际用于定义 normalization
+    # statistics 的总体，而不是拿它估计另一个总体。
+    std_type: population
+
+
+  # ==========================================================
+  # Reference population
+  # 决定“用哪些 biological samples 来计算 statistics”
+  # ==========================================================
+  #
+  # 只有：
+  #   statistics.source: reference
+  # 时有意义。
+  #
+  reference:
+
+    # --------------------------------------------------------
+    # reference population
+    # --------------------------------------------------------
+    #
+    # train:
+    #   只使用训练集中的 siRNA treatment images
+    #
+    #   z 的意义：
+    #   相对于所有 train siRNA phenotype 的总体位置
+    #
+    #
+    # N:
+    #   Negative control / untreated control
+    #
+    #   z 的意义：
+    #   相对于 untreated biological baseline
+    #   偏离了多少个标准差
+    #
+    #
+    # P:
+    #   Positive control / treatment control
+    #
+    #   z 的意义：
+    #   相对于 positive-control population
+    #   偏离了多少个标准差
+    #
+    #
+    # NP:
+    #   N + P，即全部 controls
+    #
+    #   z 的意义：
+    #   相对于整个 control population 的总体位置
+    #
+    #
+    # train_control:
+    #   train + N + P
+    #
+    #   z 的意义：
+    #   相对于整个 training population
+    #   （train treatment + controls）的总体位置
+    population: N
+
+
+    # --------------------------------------------------------
+    # train / val / test 的 reference statistics 如何获得
+    # --------------------------------------------------------
+    #
+    # train_only:
+    #   只在 train-side reference 上 fit statistics，
+    #   然后冻结并应用到 train / val / test。
+    #
+    #   这是传统 machine-learning preprocessing。
+    #
+    #
+    # same_split:
+    #   每个 split 使用自己的 reference。
+    #
+    #   例如：
+    #       train treatment <- train controls
+    #       val treatment   <- val controls
+    #       test treatment  <- test controls
+    #
+    #   对 control-based batch correction 有意义，
+    #   前提是 inference/test 时也确实拥有对应 control。
+    #
+    #   注意：
+    #   这属于 transductive / batch-aware preprocessing，
+    #   和普通 train-only normalization 是不同实验假设。
+    #
+    # 不提供：
+    #   "train 和 val statistics 再平均"
+    # 因为目前没有明确数学依据。
+    split_policy: train_only
+
+
+  # ==========================================================
+  # Application
+  # normalization 在 image pipeline 中的位置
+  # ==========================================================
+  application:
+
+    # --------------------------------------------------------
+    # normalization 相对于 resize 的位置
+    # --------------------------------------------------------
+    #
+    # before_resize:
+    #   raw image
+    #       -> normalization
+    #       -> resize
+    #       -> augmentation
+    #
+    #   这是目前计划使用的设置。
+    #
+    # after_resize:
+    #   raw image
+    #       -> resize
+    #       -> normalization
+    #       -> augmentation
+    #
+    # 特别是 spatial: pixel 时，这个参数非常重要，
+    # 因为 mean/std spatial map 的 H×W 必须和
+    # normalization 时 image 的 H×W 一致。
+    position: before_resize
+
+
+  # ==========================================================
+  # Numerical settings
+  # ==========================================================
+
+  # 防止 std=0 时除零
+  #
+  # x_norm = (x - mean) / (std + eps)
+  eps: 1.0e-6
+
+
+  # ----------------------------------------------------------
+  # 当 per-experiment / per-plate statistics 找不到对应 group
+  # 时如何处理
+  # ----------------------------------------------------------
+  #
+  # error:
+  #   直接报错。
+  #   推荐实验阶段使用，避免悄悄用错 statistics。
+  #
+  # global:
+  #   fallback 到 global statistics。
+  #   后期如果确实需要再考虑。
+  missing_group: error

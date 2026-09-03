@@ -8,7 +8,6 @@ from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 from tqdm import tqdm
 
-from rxrx1.data.dataset import RxRxDataset
 
 # ============================================================
 # Basic utilities

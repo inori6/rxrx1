@@ -109,5 +109,4 @@ PROJECT_STRUCTURE.md
 */.stfolder/
 /transform_samples.yaml
 /results/analysis/
-configs/test.yaml
 scripts/run_experiments_thinkbook.ps1

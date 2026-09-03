@@ -13,7 +13,14 @@ from rxrx1.utils.logger import (
 from rxrx1.utils.tracking import log_wandb_epoch
 
 
-def train_one_epoch(model, loader, optimizer, criterion, device):
+def train_one_epoch(
+    model,
+    loader,
+    optimizer,
+    criterion,
+    device,
+    batch_normalizer=None,
+):
     model.train()
     total_loss = 0.0
     total_correct = 0
@@ -23,6 +30,9 @@ def train_one_epoch(model, loader, optimizer, criterion, device):
     for batch in pbar:
         images = batch["image"].to(device)
         labels = batch["label"].to(device)
+
+        if batch_normalizer is not None:
+            images = batch_normalizer(images, batch)
 
         optimizer.zero_grad()
         outputs = model(images)
@@ -45,7 +55,13 @@ def train_one_epoch(model, loader, optimizer, criterion, device):
 
 
 @torch.no_grad()
-def validate_one_epoch(model, loader, criterion, device):
+def validate_one_epoch(
+    model,
+    loader,
+    criterion,
+    device,
+    batch_normalizer=None,
+):
     model.eval()
     total_loss = 0.0
     total_correct = 0
@@ -55,6 +71,9 @@ def validate_one_epoch(model, loader, criterion, device):
     for batch in pbar:
         images = batch["image"].to(device)
         labels = batch["label"].to(device)
+
+        if batch_normalizer is not None:
+            images = batch_normalizer(images, batch)
 
         outputs = model(images)
         loss = criterion(outputs, labels)
@@ -84,27 +103,18 @@ def fit_model(
     checkpoint_path,
     logger,
     run,
+    train_batch_normalizer=None,
+    val_batch_normalizer=None,
 ):
     if epochs <= 0:
-        raise ValueError(
-            f"epochs must be greater than 0, got {epochs}"
-        )
+        raise ValueError(f"epochs must be greater than 0, got {epochs}")
 
     results = TrainingResults()
-
     epoch_runtimes = []
 
-    for epoch in tqdm(
-        range(epochs),
-        desc="Epoch",
-    ):
+    for epoch in tqdm(range(epochs), desc="Epoch"):
         epoch_number = epoch + 1
-
         epoch_start_time = time.perf_counter()
-
-        # ========================================
-        # Train
-        # ========================================
 
         train_loss, train_acc = train_one_epoch(
             model,
@@ -112,39 +122,19 @@ def fit_model(
             optimizer,
             criterion,
             device,
+            batch_normalizer=train_batch_normalizer,
         )
-
-        # ========================================
-        # Validation
-        # ========================================
-
         val_loss, val_acc = validate_one_epoch(
             model,
             val_loader,
             criterion,
             device,
+            batch_normalizer=val_batch_normalizer,
         )
 
-        # ========================================
-        # Runtime
-        # ========================================
-
-        epoch_runtime_seconds = (
-            time.perf_counter()
-            - epoch_start_time
-        )
-
-        epoch_runtime_minutes = (
-            epoch_runtime_seconds / 60
-        )
-
-        epoch_runtimes.append(
-            epoch_runtime_seconds
-        )
-
-        # ========================================
-        # Results
-        # ========================================
+        epoch_runtime_seconds = time.perf_counter() - epoch_start_time
+        epoch_runtime_minutes = epoch_runtime_seconds / 60
+        epoch_runtimes.append(epoch_runtime_seconds)
 
         is_best = results.update_epoch(
             epoch=epoch_number,
@@ -153,10 +143,6 @@ def fit_model(
             val_loss=val_loss,
             val_acc=val_acc,
         )
-
-        # ========================================
-        # Logger
-        # ========================================
 
         log_epoch_result(
             logger=logger,
@@ -167,11 +153,6 @@ def fit_model(
             val_acc=val_acc,
             runtime_minutes=epoch_runtime_minutes,
         )
-
-        # ========================================
-        # W&B
-        # ========================================
-
         log_wandb_epoch(
             run=run,
             epoch=epoch_number,
@@ -182,10 +163,6 @@ def fit_model(
             runtime_minutes=epoch_runtime_minutes,
         )
 
-        # ========================================
-        # Checkpoint
-        # ========================================
-
         if is_best and checkpoint_enabled:
             save_checkpoint(
                 model=model,
@@ -194,7 +171,6 @@ def fit_model(
                 val_acc=val_acc,
                 path=checkpoint_path,
             )
-
             log_best_checkpoint(
                 logger=logger,
                 epoch=epoch_number,
@@ -202,12 +178,6 @@ def fit_model(
                 val_loss=val_loss,
             )
 
-    # ========================================
-    # Runtime summary
-    # ========================================
-
-    results.set_runtime(
-        epoch_runtimes
-    )
-
+    results.set_runtime(epoch_runtimes)
     return results
+

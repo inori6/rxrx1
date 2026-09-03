@@ -1,0 +1,118 @@
+experiment:
+  name: test_np_plate_train_only
+  seed: 0
+
+data:
+  train_manifest: data/processed/splits/d1_train_treatment.csv
+  val_manifest: data/processed/splits/d1_val_treatment.csv
+
+  train_control_manifest: data/processed/splits/d1_train_control.csv
+  val_control_manifest: data/processed/splits/d1_val_control.csv
+
+  batch_size: 8
+  num_workers: 4
+
+  shuffle_train: true
+  shuffle_val: false
+
+  # smoke test 用小尺寸加快运行
+  image_size: 32
+
+model:
+  name: efficientnet_b2
+  pretrained: true
+
+loss:
+  name: cross_entropy
+
+transform:
+  switch: true
+
+  train:
+    - name: resize
+
+  val:
+    - name: resize
+
+normalization:
+  enabled: true
+  method: zscore
+
+  statistics:
+    # mean/std 来自 reference images
+    source: reference
+
+    # train 按 experiment + plate 计算 statistics
+    grouping: plate
+
+    # 对每个 channel 的全部 H×W pixels 一起统计
+    spatial: global
+
+    # 6 个 channel 分别计算 mean/std
+    # mean.shape = [6, 1, 1]
+    # std.shape  = [6, 1, 1]
+    channel: per_channel
+
+    # population std, ddof = 0
+    std_type: population
+
+  reference:
+    # negative + positive controls
+    population: NP
+
+    # validation reference policy:
+    #
+    # train_only:
+    #   train -> train per-plate stats
+    #   val   -> pooled train global stats
+    #
+    # val_only:
+    #   train -> train per-plate stats
+    #   val   -> val per-plate stats
+    #
+    # all:
+    #   train -> train per-plate stats
+    #   val   -> pooled train global + val per-plate stats
+    split_policy: train_only
+
+  application:
+    # raw image
+    #   -> normalization
+    #   -> resize
+    #   -> augmentation
+    position: before_resize
+
+  eps: 1.0e-6
+
+  missing_group: error
+
+  cache:
+    load: true
+    save: true
+    dir: outputs/normalization_stats
+
+    # cache 不存在或不兼容时重新计算
+    missing: compute
+
+optimizer:
+  name: adamw
+  lr: 0.0001
+  weight_decay: 0.0001
+
+training:
+  epochs: 2
+
+logging:
+  level: INFO
+  log_dir: outputs/logs
+
+checkpoint:
+  enabled: false
+  dir: outputs/checkpoints
+  monitor: val_acc
+
+wandb:
+  enabled: false
+  project: rxrx1
+  mode: online
+  dir: outputs
