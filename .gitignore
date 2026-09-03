@@ -46,7 +46,6 @@ desktop.ini
 # =========================
 data/raw/
 data/interim/
-data/processed/
 data/cache/
 
 # 保留 data/splits/

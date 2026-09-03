@@ -75,31 +75,6 @@ def checkout_git_ref():
     )
 
 
-def prepare_splits():
-    manifest_name = "d1_train_treatment.csv"
-    matches = list(Path("/kaggle/input").glob(f"**/{manifest_name}"))
-
-    if not matches:
-        raise FileNotFoundError(
-            f"Split dataset not found under /kaggle/input: {manifest_name}"
-        )
-
-    if len(matches) > 1:
-        raise RuntimeError(
-            f"Multiple split datasets contain {manifest_name}: {matches}"
-        )
-
-    source_dir = matches[0].parent
-    destination_dir = PROJECT_DIR / "data" / "processed" / "splits"
-    destination_dir.mkdir(parents=True, exist_ok=True)
-
-    copied_files = 0
-    for source in source_dir.iterdir():
-        if source.is_file():
-            shutil.copy2(source, destination_dir / source.name)
-            copied_files += 1
-
-    print(f"Copied {copied_files} split files from {source_dir}")
 
 def install_project():
     run_command(
@@ -167,7 +142,6 @@ def main():
     setup_secrets()
     clone_repo()
     checkout_git_ref()
-    prepare_splits()
     install_project()
 
     print(f"Repository : {REPO_URL}")
