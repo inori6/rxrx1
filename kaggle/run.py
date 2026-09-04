@@ -4,45 +4,84 @@ import shutil
 import subprocess
 import sys
 import time
+
 import torch
 
-print("GPU:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU")
-print("PyTorch:", torch.__version__)
-print("CUDA:", torch.version.cuda)
-print("cuDNN:", torch.backends.cudnn.version())
+
+print(
+    "GPU:",
+    torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU",
+    flush=True,
+)
+print("GPU count:", torch.cuda.device_count(), flush=True)
+print("PyTorch:", torch.__version__, flush=True)
+print("CUDA:", torch.version.cuda, flush=True)
+print("cuDNN:", torch.backends.cudnn.version(), flush=True)
+
 
 REPO_URL = "https://github.com/inori6/rxrx1.git"
-GIT_REF = "experiment/normalization"
-
 WORK_DIR = Path("/kaggle/working")
 PROJECT_DIR = WORK_DIR / "rxrx1"
 
-WANDB_KEY_PATHS = [
-    p
-    for p in Path("/kaggle/input").rglob("wandb_api_key.txt")
-    if "rxrx1-wandb-secret" in p.parts
+
+# =============================================================================
+# REVISE
+# =============================================================================
+
+GIT_REF = "experiment/normalization"
+
+CONFIGS = [
+    "configs/normalization/efficientnet_b2_norm/grouping/"
+    "effb2_norm_src-sample_pop-np_sp-global_ch-shared_pol-trainonly_pos-pre.yaml",
 ]
 
-if len(WANDB_KEY_PATHS) != 1:
+# =============================================================================
+
+
+WANDB_KEY_CANDIDATES = [
+    Path(
+        "/kaggle/input/datasets/maributa/"
+        "rxrx1-wandb-secret/wandb_api_key.txt"
+    ),
+    Path(
+        "/kaggle/input/"
+        "rxrx1-wandb-secret/wandb_api_key.txt"
+    ),
+]
+
+WANDB_KEY_PATHS = [
+    path
+    for path in WANDB_KEY_CANDIDATES
+    if path.is_file()
+]
+
+if len(WANDB_KEY_PATHS) == 0:
     raise FileNotFoundError(
-        f"Expected exactly one rxrx1 W&B key, found: {WANDB_KEY_PATHS}"
+        "W&B API key not found.\n"
+        f"Checked: {WANDB_KEY_CANDIDATES}"
+    )
+
+if len(WANDB_KEY_PATHS) > 1:
+    raise RuntimeError(
+        "Multiple W&B API keys found.\n"
+        f"Found: {WANDB_KEY_PATHS}"
     )
 
 WANDB_KEY_PATH = WANDB_KEY_PATHS[0]
 
-print("W&B key path:", WANDB_KEY_PATH)
-
-CONFIGS = [
-    "configs/normalization/efficientnet_b2_norm/grouping/effb2_norm_src-sample_pop-np_sp-global_ch-shared_pol-trainonly_pos-pre.yaml"
-]
+print(
+    "W&B key path:",
+    WANDB_KEY_PATH,
+    flush=True,
+)
 
 
 def run_command(command, cwd=None, check=True):
-    print()
-    print("=" * 80)
-    print("Running:")
-    print(" ".join(map(str, command)))
-    print("=" * 80)
+    print(flush=True)
+    print("=" * 80, flush=True)
+    print("Running:", flush=True)
+    print(" ".join(map(str, command)), flush=True)
+    print("=" * 80, flush=True)
 
     return subprocess.run(
         command,
@@ -62,15 +101,24 @@ def setup_secrets():
     ).strip()
 
     if not key:
-        raise RuntimeError("W&B API key file is empty.")
+        raise RuntimeError(
+            "W&B API key file is empty."
+        )
 
     os.environ["WANDB_API_KEY"] = key
-    print("WANDB_API_KEY loaded: True")
+
+    print(
+        "WANDB_API_KEY loaded: True",
+        flush=True,
+    )
 
 
 def clone_repo():
     if PROJECT_DIR.exists():
-        print(f"Removing existing project directory: {PROJECT_DIR}")
+        print(
+            f"Removing existing project directory: {PROJECT_DIR}",
+            flush=True,
+        )
         shutil.rmtree(PROJECT_DIR)
 
     run_command(
@@ -85,7 +133,10 @@ def clone_repo():
 
 
 def checkout_git_ref():
-    print(f"Checking out Git ref: {GIT_REF}")
+    print(
+        f"Checking out Git ref: {GIT_REF}",
+        flush=True,
+    )
 
     run_command(
         [
@@ -121,15 +172,21 @@ def install_project():
 
 
 def run_experiment(config_path):
-    print()
-    print("#" * 80)
-    print(f"STARTING: {config_path}")
-    print("#" * 80)
+    print(flush=True)
+    print("#" * 80, flush=True)
+    print(
+        f"STARTING: {config_path}",
+        flush=True,
+    )
+    print("#" * 80, flush=True)
 
     config_file = PROJECT_DIR / config_path
 
     if not config_file.exists():
-        print(f"CONFIG NOT FOUND: {config_file}")
+        print(
+            f"CONFIG NOT FOUND: {config_file}",
+            flush=True,
+        )
         return False, None
 
     start_time = time.time()
@@ -137,6 +194,7 @@ def run_experiment(config_path):
     result = subprocess.run(
         [
             sys.executable,
+            "-u",
             "scripts/train.py",
             "--config",
             config_path,
@@ -144,49 +202,89 @@ def run_experiment(config_path):
         cwd=PROJECT_DIR,
     )
 
-    runtime_minutes = (time.time() - start_time) / 60
+    runtime_minutes = (
+        time.time() - start_time
+    ) / 60
 
     if result.returncode == 0:
-        print(f"SUCCESS: {config_path}")
+        print(
+            f"SUCCESS: {config_path}",
+            flush=True,
+        )
         success = True
     else:
-        print(f"FAILED: {config_path}")
-        print(f"Return code: {result.returncode}")
+        print(
+            f"FAILED: {config_path}",
+            flush=True,
+        )
+        print(
+            f"Return code: {result.returncode}",
+            flush=True,
+        )
         success = False
 
-    print(f"Runtime: {runtime_minutes:.2f} min")
+    print(
+        f"Runtime: {runtime_minutes:.2f} min",
+        flush=True,
+    )
 
     return success, runtime_minutes
 
 
 def main():
-    print("=" * 80)
-    print("RxRx1 Kaggle Experiment Runner")
-    print("=" * 80)
+    print("=" * 80, flush=True)
+    print(
+        "RxRx1 Kaggle Experiment Runner",
+        flush=True,
+    )
+    print("=" * 80, flush=True)
 
     setup_secrets()
     clone_repo()
     checkout_git_ref()
     install_project()
 
-    print(f"Repository : {REPO_URL}")
-    print(f"Git ref    : {GIT_REF}")
-    print(f"Experiments: {len(CONFIGS)}")
+    print(
+        f"Repository : {REPO_URL}",
+        flush=True,
+    )
+    print(
+        f"Git ref    : {GIT_REF}",
+        flush=True,
+    )
+    print(
+        f"Experiments: {len(CONFIGS)}",
+        flush=True,
+    )
 
     results = []
     total_start = time.time()
 
-    for i, config_path in enumerate(CONFIGS, start=1):
-        print()
-        print("=" * 80)
-        print(f"EXPERIMENT {i}/{len(CONFIGS)}")
-        print("=" * 80)
+    for i, config_path in enumerate(
+        CONFIGS,
+        start=1,
+    ):
+        print(flush=True)
+        print("=" * 80, flush=True)
+        print(
+            f"EXPERIMENT {i}/{len(CONFIGS)}",
+            flush=True,
+        )
+        print("=" * 80, flush=True)
 
         try:
-            success, runtime = run_experiment(config_path)
+            success, runtime = run_experiment(
+                config_path
+            )
         except Exception as exc:
-            print(f"UNEXPECTED ERROR: {exc}")
-            print("Continuing to next experiment...")
+            print(
+                f"UNEXPECTED ERROR: {exc}",
+                flush=True,
+            )
+            print(
+                "Continuing to next experiment...",
+                flush=True,
+            )
             success = False
             runtime = None
 
@@ -198,15 +296,22 @@ def main():
             }
         )
 
-    total_runtime = (time.time() - total_start) / 60
+    total_runtime = (
+        time.time() - total_start
+    ) / 60
 
-    print()
-    print("=" * 80)
-    print("SUMMARY")
-    print("=" * 80)
+    print(flush=True)
+    print("=" * 80, flush=True)
+    print("SUMMARY", flush=True)
+    print("=" * 80, flush=True)
 
     for result in results:
-        status = "SUCCESS" if result["success"] else "FAILED"
+        status = (
+            "SUCCESS"
+            if result["success"]
+            else "FAILED"
+        )
+
         runtime = (
             "N/A"
             if result["runtime"] is None
@@ -216,11 +321,15 @@ def main():
         print(
             f"{status:8} | "
             f"{runtime:12} | "
-            f"{result['config']}"
+            f"{result['config']}",
+            flush=True,
         )
 
-    print()
-    print(f"Total runtime: {total_runtime:.2f} min")
+    print(flush=True)
+    print(
+        f"Total runtime: {total_runtime:.2f} min",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":
