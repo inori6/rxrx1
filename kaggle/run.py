@@ -12,17 +12,28 @@ print("CUDA:", torch.version.cuda)
 print("cuDNN:", torch.backends.cudnn.version())
 
 REPO_URL = "https://github.com/inori6/rxrx1.git"
-GIT_REF = "experiment/convergence"
+GIT_REF = "experiment/normalization"
 
 WORK_DIR = Path("/kaggle/working")
 PROJECT_DIR = WORK_DIR / "rxrx1"
 
-WANDB_KEY_PATH = Path(
-    "/kaggle/input/rxrx1-wandb-secret/wandb_api_key.txt"
-)
+WANDB_KEY_PATHS = [
+    p
+    for p in Path("/kaggle/input").rglob("wandb_api_key.txt")
+    if "rxrx1-wandb-secret" in p.parts
+]
+
+if len(WANDB_KEY_PATHS) != 1:
+    raise FileNotFoundError(
+        f"Expected exactly one rxrx1 W&B key, found: {WANDB_KEY_PATHS}"
+    )
+
+WANDB_KEY_PATH = WANDB_KEY_PATHS[0]
+
+print("W&B key path:", WANDB_KEY_PATH)
 
 CONFIGS = [
-    "configs/convergence/efficientnet_b2_30e.yaml",
+    "configs/normalization/efficientnet_b2_norm/grouping/effb2_norm_src-sample_pop-np_sp-global_ch-shared_pol-trainonly_pos-pre.yaml"
 ]
 
 
