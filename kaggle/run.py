@@ -61,8 +61,9 @@ PROJECT_DIR = WORK_DIR / "rxrx1"
 GIT_REF = "experiment/normalization"
 
 CONFIGS = [
-    "configs/normalization/efficientnet_b2_norm/grouping/"
-    "effb2_norm_src-sample_pop-np_sp-global_ch-shared_pol-trainonly_pos-pre.yaml",
+    "configs/normalization/efficientnet_b2_norm/pixel/effb2_norm_src-ref_pop-np_grp-global_sp-pixel_ch-shared_pol-trainonly_pos-pre.yaml",
+"configs/normalization/efficientnet_b2_norm/pixel/effb2_norm_src-ref_pop-np_grp-exp_sp-pixel_ch-shared_pol-trainonly_pos-pre.yaml",
+"configs/normalization/efficientnet_b2_norm/pixel/effb2_norm_src-ref_pop-np_grp-plate_sp-pixel_ch-shared_pol-trainonly_pos-pre.yaml",
 ]
 
 # =============================================================================
