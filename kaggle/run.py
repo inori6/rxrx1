@@ -58,11 +58,10 @@ PROJECT_DIR = WORK_DIR / "rxrx1"
 # REVISE
 # =============================================================================
 
-GIT_REF = "experiment/normalization"
+GIT_REF = "master"
 
 CONFIGS = [
-    "configs/normalization/efficientnet_b2_norm/grouping/"
-    "effb2_norm_src-sample_pop-np_sp-global_ch-shared_pol-trainonly_pos-pre.yaml",
+    "configs/model_baseline.yaml"
 ]
 
 # =============================================================================
