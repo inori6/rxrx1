@@ -1,0 +1,81 @@
+experiment:
+  name: effb2_norm_src-ref_pop-np_grp-plate_sp-global_ch-shared_pol-valonly_pos-pre
+  seed: 0
+
+data:
+  train_manifest: data/processed/splits/d1_train_treatment.csv
+  val_manifest: data/processed/splits/d1_val_treatment.csv
+  train_control_manifest: data/processed/splits/d1_train_control.csv
+  val_control_manifest: data/processed/splits/d1_val_control.csv
+
+  batch_size: 32
+  num_workers: 4
+  shuffle_train: true
+  shuffle_val: false
+  image_size: 384
+
+model:
+  name: efficientnet_b2
+  pretrained: true
+
+loss:
+  name: cross_entropy
+
+optimizer:
+  name: adamw
+  lr: 0.0001
+  weight_decay: 0.0001
+
+training:
+  epochs: 20
+
+normalization:
+  enabled: true
+  method: zscore
+  eps: 1.0e-6
+  missing_group: error
+
+  reference:
+    population: NP
+    split_policy: val_only
+
+  statistics:
+    source: reference
+    grouping: plate
+    spatial: global
+    channel: shared
+    std_type: population
+
+  application:
+    position: before_resize
+
+  cache:
+    dir: outputs/normalization_stats
+    load: true
+    missing: compute
+    save: true
+
+transform:
+  switch: true
+  train:
+    - name: resize
+  val:
+    - name: resize
+
+checkpoint:
+  enabled: true
+  dir: outputs/checkpoints
+  monitor: val_acc
+
+logging:
+  level: INFO
+  log_dir: outputs/logs
+
+wandb:
+  enabled: true
+  mode: online
+  project: rxrx1
+  dir: outputs
+
+git_commit: null
+git_ref: null
