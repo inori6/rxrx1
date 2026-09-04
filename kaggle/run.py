@@ -58,10 +58,12 @@ PROJECT_DIR = WORK_DIR / "rxrx1"
 # REVISE
 # =============================================================================
 
-GIT_REF = "experiment/normalization"
+GIT_REF = "experiment/augmentation"
 
 CONFIGS = [
-    "configs/normalization/efficientnet_b2_norm/val/effb2_norm_src-ref_pop-np_grp-plate_sp-global_ch-shared_pol-all_pos-pre.yaml"
+    "configs/augmentation/backbone.yaml",
+    "configs/augmentation/channel.yaml",
+    "configs/augmentation/backbone_channel.yaml",
 ]
 # =============================================================================
 
