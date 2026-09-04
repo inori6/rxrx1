@@ -61,8 +61,12 @@ PROJECT_DIR = WORK_DIR / "rxrx1"
 GIT_REF = "master"
 
 CONFIGS = [
-    "configs/model_baseline.yaml"
+    "configs/model_baseline.yaml",
 ]
+
+HPO_STUDY_NAME = "model_baseline_hpo"
+HPO_TIMEOUT_HOURS = 8
+HPO_MAX_TRIALS = 100
 
 # =============================================================================
 
@@ -456,9 +460,15 @@ def run_experiment(config_path):
         [
             sys.executable,
             "-u",
-            "scripts/train.py",
+            "scripts/hpo.py",
             "--config",
             config_path,
+            "--study-name",
+            HPO_STUDY_NAME,
+            "--timeout-hours",
+            str(HPO_TIMEOUT_HOURS),
+            "--max-trials",
+            str(HPO_MAX_TRIALS),
         ],
         cwd=PROJECT_DIR,
     )

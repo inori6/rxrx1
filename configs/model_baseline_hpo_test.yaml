@@ -1,5 +1,5 @@
 experiment:
-  name: model_baseline
+  name: hpo_test
   seed: 0
 
 data:
@@ -11,7 +11,7 @@ data:
   num_workers: 4
   shuffle_train: true
   shuffle_val: false
-  image_size: 384
+  image_size: 64
 
 model:
   name: efficientnet_b2
@@ -26,13 +26,13 @@ optimizer:
   weight_decay: 0.0001
 
 training:
-  epochs: 20
+  epochs: 1
 
 transform:
   switch: true
   train:
     - name: resize
-      size: 384
+      size: 64
     - name: horizontal_flip
       p: 0.5
     - name: vertical_flip
@@ -41,7 +41,7 @@ transform:
       p: 1.0
   val:
     - name: resize
-      size: 384
+      size: 64
 
 normalization:
   enabled: true
@@ -70,12 +70,12 @@ logging:
   log_dir: outputs/logs
 
 checkpoint:
-  enabled: true
+  enabled: false
   dir: outputs/checkpoints
   monitor: val_acc
 
 wandb:
-  enabled: true
+  enabled: false
   project: rxrx1
   mode: online
   dir: outputs

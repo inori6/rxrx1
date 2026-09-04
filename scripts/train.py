@@ -13,6 +13,7 @@ from rxrx1.data.normalization import build_normalizer
 from rxrx1.models.efficientnet import build_efficientnet
 from rxrx1.training.criterion import build_criterion
 from rxrx1.training.optimizers import build_optimizer
+from rxrx1.training.schedulers import build_scheduler
 from rxrx1.training.trainer import fit_model
 from rxrx1.training.validation import filter_and_validate_val_manifest
 from rxrx1.utils.paths import get_image_root
@@ -45,31 +46,44 @@ def load_config(path):
 
 def split_normalizer_by_scope(normalizer):
     """Route a normalizer to Dataset or to the loader-batch training hook."""
-
     if normalizer is None:
         return None, None
 
     apply_to = getattr(normalizer, "apply_to", "image")
+
     if apply_to == "image":
         return normalizer, None
     if apply_to == "batch":
         return None, normalizer
-    raise ValueError(f"Unknown normalizer apply_to scope: {apply_to!r}.")
+
+    raise ValueError(
+        f"Unknown normalizer apply_to scope: {apply_to!r}."
+    )
 
 
-def main():
-    args = parse_args()
-    config = load_config(args.config)
+def run_training(config, epoch_callback=None):
     set_seed(config["experiment"]["seed"])
 
     project_root = Path(__file__).resolve().parents[1]
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device(
+        "cuda" if torch.cuda.is_available() else "cpu"
+    )
 
     logger_name = config["experiment"]["name"]
-    log_file = project_root / config["logging"]["log_dir"] / f"{logger_name}.log"
-    logger = setup_logger(logger_name, log_file, config["logging"]["level"])
+    log_file = (
+        project_root
+        / config["logging"]["log_dir"]
+        / f"{logger_name}.log"
+    )
+
+    logger = setup_logger(
+        logger_name,
+        log_file,
+        config["logging"]["level"],
+    )
 
     run = setup_wandb(config, project_root)
+
     update_wandb_git_info(
         run,
         os.getenv("RXRX1_GIT_COMMIT"),
@@ -77,18 +91,42 @@ def main():
     )
 
     try:
-        train_manifest = read_manifest(project_root / config["data"]["train_manifest"])
-        val_manifest = read_manifest(project_root / config["data"]["val_manifest"])
-
-        val_manifest, train_labels, original_val_labels, val_labels = (
-            filter_and_validate_val_manifest(train_manifest, val_manifest)
+        train_manifest = read_manifest(
+            project_root
+            / config["data"]["train_manifest"]
         )
-        log_label_revised(logger, train_labels, original_val_labels, val_labels)
+        val_manifest = read_manifest(
+            project_root
+            / config["data"]["val_manifest"]
+        )
 
-        label_to_index = create_label_to_index(train_manifest)
+        (
+            val_manifest,
+            train_labels,
+            original_val_labels,
+            val_labels,
+        ) = filter_and_validate_val_manifest(
+            train_manifest,
+            val_manifest,
+        )
+
+        log_label_revised(
+            logger,
+            train_labels,
+            original_val_labels,
+            val_labels,
+        )
+
+        label_to_index = create_label_to_index(
+            train_manifest
+        )
+
         image_root = get_image_root("train")
 
-        train_transform, val_transform = prepare_transforms(config)
+        train_transform, val_transform = (
+            prepare_transforms(config)
+        )
+
         train_normalizer = build_normalizer(
             config,
             split="train",
@@ -97,13 +135,11 @@ def main():
         )
 
         normalization_config = (
-                config.get("normalization")
-                or {}
+            config.get("normalization") or {}
         )
-
         reference_config = (
-                normalization_config.get("reference")
-                or {}
+            normalization_config.get("reference")
+            or {}
         )
 
         train_reference_stats = getattr(
@@ -119,20 +155,12 @@ def main():
             )
         ).lower()
 
-        # train_only:
-        #     val directly needs train global stats
-        #
-        # all:
-        #     val needs train global stats + val stats
-        #
-        # val_only:
-        #     val does not need train stats
         share_train_stats_with_val = (
-                train_reference_stats is not None
-                and split_policy in {
-                    "train_only",
-                    "all",
-                }
+            train_reference_stats is not None
+            and split_policy in {
+                "train_only",
+                "all",
+            }
         )
 
         val_normalizer = build_normalizer(
@@ -146,10 +174,18 @@ def main():
             project_root=project_root,
             logger=logger,
         )
-        train_image_normalizer, train_batch_normalizer = split_normalizer_by_scope(
+
+        (
+            train_image_normalizer,
+            train_batch_normalizer,
+        ) = split_normalizer_by_scope(
             train_normalizer
         )
-        val_image_normalizer, val_batch_normalizer = split_normalizer_by_scope(
+
+        (
+            val_image_normalizer,
+            val_batch_normalizer,
+        ) = split_normalizer_by_scope(
             val_normalizer
         )
 
@@ -160,6 +196,7 @@ def main():
             transform=train_transform,
             normalizer=train_image_normalizer,
         )
+
         val_dataset = RxRxDataset(
             val_manifest,
             image_root,
@@ -175,6 +212,7 @@ def main():
             num_workers=config["data"]["num_workers"],
             pin_memory=torch.cuda.is_available(),
         )
+
         val_loader = DataLoader(
             val_dataset,
             batch_size=config["data"]["batch_size"],
@@ -187,10 +225,26 @@ def main():
             name=config["model"]["name"],
             num_classes=len(label_to_index),
             pretrained=config["model"]["pretrained"],
+            dropout=config["model"].get(
+                "dropout"
+            ),
         ).to(device)
 
-        criterion = build_criterion(config).to(device)
-        optimizer = build_optimizer(model, config)
+        criterion = build_criterion(
+            config
+        ).to(device)
+
+        optimizer = build_optimizer(
+            model,
+            config,
+        )
+
+        scheduler = build_scheduler(
+            optimizer=optimizer,
+            config=config,
+            epochs=config["training"]["epochs"],
+            steps_per_epoch=len(train_loader),
+        )
 
         checkpoint_path = (
             project_root
@@ -199,7 +253,12 @@ def main():
             / "best.pt"
         )
 
-        log_training_started(logger, device, len(train_dataset), len(val_dataset))
+        log_training_started(
+            logger,
+            device,
+            len(train_dataset),
+            len(val_dataset),
+        )
 
         results = fit_model(
             model=model,
@@ -209,23 +268,50 @@ def main():
             criterion=criterion,
             device=device,
             epochs=config["training"]["epochs"],
-            checkpoint_enabled=config["checkpoint"]["enabled"],
+            checkpoint_enabled=config[
+                "checkpoint"
+            ]["enabled"],
             checkpoint_path=checkpoint_path,
             logger=logger,
             run=run,
-            train_batch_normalizer=train_batch_normalizer,
-            val_batch_normalizer=val_batch_normalizer,
+            scheduler=scheduler,
+            train_batch_normalizer=(
+                train_batch_normalizer
+            ),
+            val_batch_normalizer=(
+                val_batch_normalizer
+            ),
+            epoch_callback=epoch_callback,
         )
 
-        log_training_finished(logger, results)
-        finish_wandb(run, results)
+        log_training_finished(
+            logger,
+            results,
+        )
+
+        finish_wandb(
+            run,
+            results,
+        )
+
+        return results
 
     except Exception as error:
-        log_training_failed(logger, error)
+        log_training_failed(
+            logger,
+            error,
+        )
+
         fail_wandb(run)
+
         raise
+
+
+def main():
+    args = parse_args()
+    config = load_config(args.config)
+    run_training(config)
 
 
 if __name__ == "__main__":
     main()
-
