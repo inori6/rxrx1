@@ -65,7 +65,7 @@ CONFIGS = [
 ]
 
 HPO_STUDY_NAME = "model_baseline_hpo_ratio"
-HPO_TIMEOUT_HOURS = 8
+HPO_TIMEOUT_HOURS = 10
 HPO_MAX_TRIALS = 20
 
 # =============================================================================

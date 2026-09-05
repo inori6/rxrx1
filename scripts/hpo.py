@@ -15,9 +15,12 @@ try:
 except ImportError as exc:
     raise SystemExit('Optuna is required for HPO. Install it with: pip install optuna') from exc
 from train import load_config, run_training
-RATIO_MIN = 0.3
-RATIO_MAX = 30.0
-HPO_SPACE_VERSION = 'independent-ratios-v1'
+RATIO_BOUNDS = {
+    'middle_ratio': (2.0, 5.0),
+    'late_ratio': (7.0, 14.0),
+    'head_ratio': (20.0, 45.0),
+}
+HPO_SPACE_VERSION = 'focused-layer-lrs-v1'
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Resume-safe Bayesian HPO for EfficientNet-B2.')
@@ -26,11 +29,11 @@ def parse_args():
         default='configs/model_baseline.yaml',
         help='Fixed baseline YAML config.',
     )
-    parser.add_argument('--study-name', default='model_baseline_hpo_ratio')
+    parser.add_argument('--study-name', default='model_baseline_hpo_focused')
     parser.add_argument(
         '--timeout-hours',
         type=float,
-        default=8.0,
+        default=10.0,
         help='Per-invocation timeout; a running trial finishes before stopping.',
     )
     parser.add_argument(
@@ -39,12 +42,14 @@ def parse_args():
         default=20,
         help='Total trial budget, including pruned and failed trials.',
     )
-    parser.add_argument('--base-lr-min', type=float, default=3e-05)
-    parser.add_argument('--base-lr-max', type=float, default=0.0002)
-    parser.add_argument('--weight-decay-min', type=float, default=1e-05)
-    parser.add_argument('--weight-decay-max', type=float, default=0.01)
-    parser.add_argument('--dropout-min', type=float, default=0.15)
-    parser.add_argument('--dropout-max', type=float, default=0.38)
+    parser.add_argument('--base-lr-min', type=float, default=6.5e-05)
+    parser.add_argument('--base-lr-max', type=float, default=1.15e-04)
+    # Equal lower/upper bounds keep these parameters fixed while preserving the
+    # existing config export and resume logic.
+    parser.add_argument('--weight-decay-min', type=float, default=3e-04)
+    parser.add_argument('--weight-decay-max', type=float, default=3e-04)
+    parser.add_argument('--dropout-min', type=float, default=0.22)
+    parser.add_argument('--dropout-max', type=float, default=0.22)
     parser.add_argument('--disable-wandb', action='store_true')
     return parser.parse_args()
 
@@ -371,10 +376,10 @@ def main():
         ),
         'dropout': optuna.distributions.FloatDistribution(args.dropout_min, args.dropout_max),
         **{name: optuna.distributions.FloatDistribution(
-            RATIO_MIN,
-            RATIO_MAX,
+            low,
+            high,
             log=True,
-        ) for name in ('middle_ratio', 'late_ratio', 'head_ratio')},
+        ) for name, (low, high) in RATIO_BOUNDS.items()},
     }
     space_version = study.user_attrs.get('hpo_space_version')
     if (
@@ -400,10 +405,10 @@ def main():
             'base_lr': trial.suggest_float('base_lr', args.base_lr_min, args.base_lr_max, log=True),
             **{name: trial.suggest_float(
                 name,
-                RATIO_MIN,
-                RATIO_MAX,
+                low,
+                high,
                 log=True,
-            ) for name in ('middle_ratio', 'late_ratio', 'head_ratio')},
+            ) for name, (low, high) in RATIO_BOUNDS.items()},
             'weight_decay': trial.suggest_float(
                 'weight_decay',
                 args.weight_decay_min,
