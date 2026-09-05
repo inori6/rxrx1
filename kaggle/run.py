@@ -64,9 +64,9 @@ CONFIGS = [
     "configs/model_baseline.yaml",
 ]
 
-HPO_STUDY_NAME = "model_baseline_hpo"
+HPO_STUDY_NAME = "model_baseline_hpo_ratio"
 HPO_TIMEOUT_HOURS = 8
-HPO_MAX_TRIALS = 100
+HPO_MAX_TRIALS = 20
 
 # =============================================================================
 
