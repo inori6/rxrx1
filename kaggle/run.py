@@ -14,16 +14,16 @@ from packaging.requirements import Requirement
 # Change only this section between runs.
 REPO_URL = "https://github.com/inori6/rxrx1.git"
 GIT_REF = "master"
-RUN_MODE = "train"  # "train" or "hpo"
+RUN_MODE = "hpo"  # "train" or "hpo"
 CONFIGS = [
-    "configs/metric/pk_ce.yaml"
+    "configs/metric/hierarchical_metric_hpo.yaml"
 ]
 
 # Kept for later optimizer or architecture HPO runs.
 HPO_SCRIPT = "scripts/hpo.py"
-HPO_STUDY_NAME = "model_baseline_hpo_ratio"
-HPO_TIMEOUT_HOURS = 10
-HPO_MAX_TRIALS = 20
+HPO_STUDY_NAME = "hierarchical_metric_hpo"
+HPO_TIMEOUT_HOURS = 10.5
+HPO_MAX_TRIALS = 50
 
 WORK_DIR = Path("/kaggle/working")
 PROJECT_DIR = WORK_DIR / "rxrx1"

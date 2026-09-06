@@ -15,12 +15,30 @@ try:
 except ImportError as exc:
     raise SystemExit('Optuna is required for HPO. Install it with: pip install optuna') from exc
 from train import load_config, run_training
+
 RATIO_BOUNDS = {
     'middle_ratio': (2.0, 5.0),
     'late_ratio': (7.0, 14.0),
     'head_ratio': (20.0, 45.0),
 }
-HPO_SPACE_VERSION = 'focused-layer-lrs-v1'
+CLASSIFICATION_HPO_SPACE_VERSION = 'focused-layer-lrs-v1'
+HPO_SPACE_VERSION = 'hierarchical-metric-v1'
+METRIC_BOUNDS = {
+    'lambda_metric': (0.01, 0.3, True),
+    'wt': (0.5, 1.0, False),
+    'alpha': (0.5, 1.0, False),
+    'base_lr': (5.5e-5, 1.0e-4, True),
+    'head_ratio': (24.0, 38.0, True),
+}
+FIXED_MIDDLE_RATIO = 4.684416978885584
+FIXED_LATE_RATIO = 8.6406378065851
+FIXED_WEIGHT_DECAY = 3e-4
+FIXED_DROPOUT = 0.22
+FIXED_FUSION_LR_RATIO = 3.0
+REFERENCE_BASE_LR = 7.562760031052943e-05
+REFERENCE_HEAD_RATIO = 30.64707646122206
+METRIC_ANCHORS = (0.03, 0.10, 0.30)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Resume-safe Bayesian HPO for EfficientNet-B2.')
@@ -29,7 +47,7 @@ def parse_args():
         default='configs/model_baseline.yaml',
         help='Fixed baseline YAML config.',
     )
-    parser.add_argument('--study-name', default='model_baseline_hpo_focused')
+    parser.add_argument('--study-name', default=None)
     parser.add_argument(
         '--timeout-hours',
         type=float,
@@ -39,13 +57,12 @@ def parse_args():
     parser.add_argument(
         '--max-trials',
         type=int,
-        default=20,
+        default=None,
         help='Total trial budget, including pruned and failed trials.',
     )
     parser.add_argument('--base-lr-min', type=float, default=6.5e-05)
     parser.add_argument('--base-lr-max', type=float, default=1.15e-04)
-    # Equal lower/upper bounds keep these parameters fixed while preserving the
-    # existing config export and resume logic.
+    # Classification HPO only. Equal bounds keep the focused search fixed.
     parser.add_argument('--weight-decay-min', type=float, default=3e-04)
     parser.add_argument('--weight-decay-max', type=float, default=3e-04)
     parser.add_argument('--dropout-min', type=float, default=0.22)
@@ -53,20 +70,62 @@ def parse_args():
     parser.add_argument('--disable-wandb', action='store_true')
     return parser.parse_args()
 
+
 def safe_name(value):
     cleaned = ''.join((character if character.isalnum() or character in '-_' else '_' for character in value))
     return cleaned.strip('_') or 'hpo'
+
 
 def save_yaml(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open('w', encoding='utf-8') as file:
         yaml.safe_dump(value, file, sort_keys=False, allow_unicode=True)
 
-def apply_trial_params(config, params):
+
+def get_hpo_mode(config):
+    return 'metric' if (config.get('metric') or {}).get('enabled', False) else 'classification'
+
+
+def get_space_version(hpo_mode):
+    return HPO_SPACE_VERSION if hpo_mode == 'metric' else CLASSIFICATION_HPO_SPACE_VERSION
+
+
+def resolve_study_name(value, hpo_mode):
+    if value:
+        return value
+    return 'hierarchical_metric_hpo' if hpo_mode == 'metric' else 'model_baseline_hpo_focused'
+
+
+def resolve_max_trials(value, hpo_mode):
+    return value if value is not None else (50 if hpo_mode == 'metric' else 20)
+
+
+def apply_trial_params(config, params, hpo_mode=None):
+    hpo_mode = hpo_mode or get_hpo_mode(config)
     optimizer_config = config.setdefault('optimizer', {})
     optimizer_config['name'] = 'adamw'
     optimizer_config.pop('lr', None)
     optimizer_config['base_lr'] = float(params['base_lr'])
+    if hpo_mode == 'metric':
+        wt = float(params['wt'])
+        optimizer_config['lr_ratio'] = [
+            1.0,
+            FIXED_MIDDLE_RATIO,
+            FIXED_LATE_RATIO,
+            float(params['head_ratio']),
+        ]
+        optimizer_config['weight_decay'] = FIXED_WEIGHT_DECAY
+        optimizer_config['fusion_lr_ratio'] = FIXED_FUSION_LR_RATIO
+        config.setdefault('model', {})['dropout'] = FIXED_DROPOUT
+        metric_config = config.setdefault('metric', {})
+        metric_config.update({
+            'enabled': True,
+            'lambda_metric': float(params['lambda_metric']),
+            'wt': wt,
+            'wc': 1.0 - wt,
+            'alpha': float(params['alpha']),
+        })
+        return
     optimizer_config['lr_ratio'] = [
         1.0,
         float(params['middle_ratio']),
@@ -74,19 +133,105 @@ def apply_trial_params(config, params):
         float(params['head_ratio']),
     ]
     optimizer_config['weight_decay'] = float(params['weight_decay'])
-    model_config = config.setdefault('model', {})
-    model_config['dropout'] = float(params['dropout'])
+    config.setdefault('model', {})['dropout'] = float(params['dropout'])
     config.setdefault('training', {})['epochs'] = 20
     config['scheduler'] = {'name': 'cosine', 'warmup_ratio': 0.05, 'min_lr_ratio': 0.01}
 
-def get_group_lrs(params):
+
+def get_group_lrs(params, hpo_mode='classification'):
     base_lr = float(params['base_lr'])
+    middle_ratio = FIXED_MIDDLE_RATIO if hpo_mode == 'metric' else float(params['middle_ratio'])
+    late_ratio = FIXED_LATE_RATIO if hpo_mode == 'metric' else float(params['late_ratio'])
     return {
         'early_lr': base_lr,
-        'middle_lr': base_lr * float(params['middle_ratio']),
-        'late_lr': base_lr * float(params['late_ratio']),
+        'middle_lr': base_lr * middle_ratio,
+        'late_lr': base_lr * late_ratio,
         'head_lr': base_lr * float(params['head_ratio']),
     }
+
+
+def build_expected_distributions(args, hpo_mode):
+    if hpo_mode == 'metric':
+        return {
+            name: optuna.distributions.FloatDistribution(low, high, log=log)
+            for name, (low, high, log) in METRIC_BOUNDS.items()
+        }
+    return {
+        'base_lr': optuna.distributions.FloatDistribution(
+            args.base_lr_min,
+            args.base_lr_max,
+            log=True,
+        ),
+        'weight_decay': optuna.distributions.FloatDistribution(
+            args.weight_decay_min,
+            args.weight_decay_max,
+            log=True,
+        ),
+        'dropout': optuna.distributions.FloatDistribution(args.dropout_min, args.dropout_max),
+        **{
+            name: optuna.distributions.FloatDistribution(low, high, log=True)
+            for name, (low, high) in RATIO_BOUNDS.items()
+        },
+    }
+
+
+def sample_trial_params(trial, args, hpo_mode):
+    if hpo_mode == 'metric':
+        return {
+            name: trial.suggest_float(name, low, high, log=log)
+            for name, (low, high, log) in METRIC_BOUNDS.items()
+        }
+    return {
+        'base_lr': trial.suggest_float('base_lr', args.base_lr_min, args.base_lr_max, log=True),
+        **{
+            name: trial.suggest_float(name, low, high, log=True)
+            for name, (low, high) in RATIO_BOUNDS.items()
+        },
+        'weight_decay': trial.suggest_float(
+            'weight_decay',
+            args.weight_decay_min,
+            args.weight_decay_max,
+            log=True,
+        ),
+        'dropout': trial.suggest_float('dropout', args.dropout_min, args.dropout_max),
+    }
+
+
+def validate_study_space(study, expected_distributions, space_version):
+    existing_version = study.user_attrs.get('hpo_space_version')
+    if (
+        existing_version not in (None, space_version)
+        or (study.trials and existing_version is None)
+        or any(
+            expected_distributions.get(name) != distribution
+            for trial in study.trials
+            for name, distribution in trial.distributions.items()
+        )
+    ):
+        raise ValueError('Existing study uses a different search space. Choose a new --study-name.')
+    study.set_user_attr('hpo_space_version', space_version)
+
+
+def enqueue_initial_trials(study, hpo_mode):
+    if hpo_mode != 'metric' or study.trials:
+        return 0
+    for lambda_metric in METRIC_ANCHORS:
+        study.enqueue_trial({
+            'lambda_metric': lambda_metric,
+            'wt': 0.7,
+            'alpha': 0.8,
+            'base_lr': REFERENCE_BASE_LR,
+            'head_ratio': REFERENCE_HEAD_RATIO,
+        })
+    return len(METRIC_ANCHORS)
+
+
+def get_effective_best_params(params, hpo_mode):
+    effective = dict(params)
+    if hpo_mode == 'metric':
+        effective['wc'] = 1.0 - float(params['wt'])
+    return effective
+
 
 def get_wandb_state_config(base_config, args, study_slug):
     if args.disable_wandb:
@@ -116,6 +261,7 @@ def get_wandb_state_config(base_config, args, study_slug):
         'state_run_id': state_run_id,
     }
 
+
 def restore_hpo_state(state_config, study_dir, storage_path, sampler_path):
     if state_config is None:
         return False
@@ -140,6 +286,7 @@ def restore_hpo_state(state_config, study_dir, storage_path, sampler_path):
     print(f'Sampler : {sampler_path}')
     return True
 
+
 def load_sampler(sampler_path):
     if sampler_path.is_file():
         with sampler_path.open('rb') as file:
@@ -148,10 +295,12 @@ def load_sampler(sampler_path):
         return sampler
     return optuna.samplers.TPESampler(seed=0, n_startup_trials=5, multivariate=True)
 
+
 def save_sampler(study, sampler_path):
     sampler_path.parent.mkdir(parents=True, exist_ok=True)
     with sampler_path.open('wb') as file:
         pickle.dump(study.sampler, file)
+
 
 def create_database_snapshot(storage_path, snapshot_path):
     if not storage_path.is_file():
@@ -166,6 +315,7 @@ def create_database_snapshot(storage_path, snapshot_path):
     finally:
         destination.close()
         source.close()
+
 
 def sync_best_checkpoint(study, best_checkpoint_path):
     try:
@@ -182,7 +332,16 @@ def sync_best_checkpoint(study, best_checkpoint_path):
             print(f'Updated persistent best checkpoint: {best_checkpoint_path}')
     return best_checkpoint_path.is_file()
 
-def write_study_outputs(study, base_config, study_dir, storage_path, best_checkpoint_path):
+
+def write_study_outputs(
+    study,
+    base_config,
+    study_dir,
+    storage_path,
+    best_checkpoint_path,
+    hpo_mode=None,
+):
+    hpo_mode = hpo_mode or get_hpo_mode(base_config)
     completed_trials = [trial for trial in study.trials if trial.state == optuna.trial.TrialState.COMPLETE]
     trial_counts = {}
     for state in optuna.trial.TrialState:
@@ -205,9 +364,10 @@ def write_study_outputs(study, base_config, study_dir, storage_path, best_checkp
         return None
     best_trial = study.best_trial
     best_config = copy.deepcopy(base_config)
-    apply_trial_params(best_config, best_trial.params)
-    best_config['experiment']['name'] = f"{base_config['experiment']['name']}_hpo-ratio-best"
-    best_group_lrs = get_group_lrs(best_trial.params)
+    apply_trial_params(best_config, best_trial.params, hpo_mode)
+    suffix = 'hpo-metric-best' if hpo_mode == 'metric' else 'hpo-ratio-best'
+    best_config['experiment']['name'] = f"{base_config['experiment']['name']}_{suffix}"
+    best_group_lrs = get_group_lrs(best_trial.params, hpo_mode)
     best_config['hpo'] = {
         'study_name': study.study_name,
         'source_trial': best_trial.number,
@@ -215,6 +375,8 @@ def write_study_outputs(study, base_config, study_dir, storage_path, best_checkp
         'objective_value': best_trial.value,
         **best_group_lrs,
     }
+    if hpo_mode == 'metric':
+        best_config['hpo'].update(get_effective_best_params(best_trial.params, hpo_mode))
     save_yaml(best_config_path, best_config)
     save_yaml(
         summary_path,
@@ -225,7 +387,7 @@ def write_study_outputs(study, base_config, study_dir, storage_path, best_checkp
             'completed_trials': len(completed_trials),
             'best_trial': best_trial.number,
             'best_value': best_trial.value,
-            'best_params': best_trial.params,
+            'best_params': get_effective_best_params(best_trial.params, hpo_mode),
             'best_group_lrs': best_group_lrs,
             'best_trial_config': best_trial.user_attrs.get('config_path'),
             'source_checkpoint': best_trial.user_attrs.get('checkpoint_path'),
@@ -233,6 +395,7 @@ def write_study_outputs(study, base_config, study_dir, storage_path, best_checkp
         },
     )
     return best_trial
+
 
 def upload_hpo_state(
     state_config,
@@ -276,6 +439,7 @@ def upload_hpo_state(
         run.log_artifact(artifact, aliases=['latest'])
     print(f"Uploaded HPO state to W&B: {state_config['artifact_name']}:latest")
 
+
 def save_hpo_state(
     study,
     base_config,
@@ -285,6 +449,7 @@ def save_hpo_state(
     storage_path,
     sampler_path,
     best_checkpoint_path,
+    hpo_mode=None,
 ):
     save_sampler(study, sampler_path)
     sync_best_checkpoint(study, best_checkpoint_path)
@@ -294,6 +459,7 @@ def save_hpo_state(
         study_dir=study_dir,
         storage_path=storage_path,
         best_checkpoint_path=best_checkpoint_path,
+        hpo_mode=hpo_mode,
     )
     if state_config is None:
         return
@@ -318,12 +484,11 @@ def save_hpo_state(
         if snapshot_dir.exists() and (not any(snapshot_dir.iterdir())):
             snapshot_dir.rmdir()
 
+
 def main():
     args = parse_args()
     if args.timeout_hours <= 0:
         raise ValueError('--timeout-hours must be greater than zero.')
-    if args.max_trials <= 0:
-        raise ValueError('--max-trials must be greater than zero.')
     if not 0 < args.base_lr_min <= args.base_lr_max:
         raise ValueError('Expected 0 < --base-lr-min <= --base-lr-max.')
     if not 0 < args.weight_decay_min <= args.weight_decay_max:
@@ -335,9 +500,16 @@ def main():
     if not config_path.is_absolute():
         config_path = project_root / config_path
     base_config = load_config(config_path)
+    hpo_mode = get_hpo_mode(base_config)
+    args.study_name = resolve_study_name(args.study_name, hpo_mode)
+    args.max_trials = resolve_max_trials(args.max_trials, hpo_mode)
+    if args.max_trials <= 0:
+        raise ValueError('--max-trials must be greater than zero.')
     study_slug = safe_name(args.study_name)
-    if study_slug == 'model_baseline_hpo':
+    if hpo_mode == 'classification' and study_slug == 'model_baseline_hpo':
         raise ValueError('Stage 2 requires a new study name.')
+    if hpo_mode == 'metric' and study_slug in {'model_baseline_hpo', 'model_baseline_hpo_focused'}:
+        raise ValueError('Metric HPO requires a study name isolated from classification HPO.')
     study_dir = project_root / 'outputs' / 'hpo' / study_slug
     config_dir = study_dir / 'configs'
     storage_path = (study_dir / 'study.db').resolve()
@@ -362,66 +534,27 @@ def main():
         pruner=pruner,
         load_if_exists=True,
     )
-    # Resume only this search space, including partially sampled trials.
-    expected_distributions = {
-        'base_lr': optuna.distributions.FloatDistribution(
-            args.base_lr_min,
-            args.base_lr_max,
-            log=True,
-        ),
-        'weight_decay': optuna.distributions.FloatDistribution(
-            args.weight_decay_min,
-            args.weight_decay_max,
-            log=True,
-        ),
-        'dropout': optuna.distributions.FloatDistribution(args.dropout_min, args.dropout_max),
-        **{name: optuna.distributions.FloatDistribution(
-            low,
-            high,
-            log=True,
-        ) for name, (low, high) in RATIO_BOUNDS.items()},
-    }
-    space_version = study.user_attrs.get('hpo_space_version')
-    if (
-        space_version not in (None, HPO_SPACE_VERSION)
-        or (study.trials and space_version is None)
-        or any(
-            expected_distributions.get(name) != distribution
-            for trial in study.trials
-            for name, distribution in trial.distributions.items()
-        )
-    ):
-        raise ValueError('Existing study uses a different search space. Choose a new --study-name.')
-    study.set_user_attr('hpo_space_version', HPO_SPACE_VERSION)
-    # The budget applies to the whole study, not each resumed invocation.
-    remaining_trials = max(0, args.max_trials - len(study.trials))
+    expected_distributions = build_expected_distributions(args, hpo_mode)
+    validate_study_space(study, expected_distributions, get_space_version(hpo_mode))
+    enqueued = enqueue_initial_trials(study, hpo_mode)
+    if enqueued:
+        print(f'Enqueued metric anchors: {enqueued}')
+    budgeted_trials = sum(trial.state != optuna.trial.TrialState.WAITING for trial in study.trials)
+    remaining_trials = max(0, args.max_trials - budgeted_trials)
+    print(f'HPO mode        : {hpo_mode}')
     print(f'Study name      : {study.study_name}')
     print(f'Existing trials : {len(study.trials)}')
+    print(f'Max trials      : {args.max_trials}')
     print(f'Database        : {storage_path}')
 
     def objective(trial):
         trial_config = copy.deepcopy(base_config)
-        params = {
-            'base_lr': trial.suggest_float('base_lr', args.base_lr_min, args.base_lr_max, log=True),
-            **{name: trial.suggest_float(
-                name,
-                low,
-                high,
-                log=True,
-            ) for name, (low, high) in RATIO_BOUNDS.items()},
-            'weight_decay': trial.suggest_float(
-                'weight_decay',
-                args.weight_decay_min,
-                args.weight_decay_max,
-                log=True,
-            ),
-            'dropout': trial.suggest_float('dropout', args.dropout_min, args.dropout_max),
-        }
-        apply_trial_params(trial_config, params)
+        params = sample_trial_params(trial, args, hpo_mode)
+        apply_trial_params(trial_config, params, hpo_mode)
         base_experiment_name = base_config['experiment']['name']
         trial_name = f'{study_slug}_trial-{trial.number:04d}'
         trial_config['experiment']['name'] = trial_name
-        group_lrs = get_group_lrs(params)
+        group_lrs = get_group_lrs(params, hpo_mode)
         trial_config['hpo'] = {
             'study_name': args.study_name,
             'trial_number': trial.number,
@@ -429,6 +562,8 @@ def main():
             'objective': 'best_val_acc',
             **group_lrs,
         }
+        if hpo_mode == 'metric':
+            trial_config['hpo'].update(get_effective_best_params(params, hpo_mode))
         if args.disable_wandb:
             trial_config.setdefault('wandb', {})['enabled'] = False
         trial_config_path = config_dir / f'trial-{trial.number:04d}.yaml'
@@ -449,6 +584,7 @@ def main():
                 was_pruned = True
                 return True
             return False
+
         try:
             results = run_training(trial_config, epoch_callback=report_epoch)
         finally:
@@ -474,7 +610,9 @@ def main():
             storage_path=storage_path,
             sampler_path=sampler_path,
             best_checkpoint_path=best_checkpoint_path,
+            hpo_mode=hpo_mode,
         )
+
     try:
         study.optimize(
             objective,
@@ -497,6 +635,7 @@ def main():
                 storage_path=storage_path,
                 sampler_path=sampler_path,
                 best_checkpoint_path=best_checkpoint_path,
+                hpo_mode=hpo_mode,
             )
     completed_trials = [trial for trial in study.trials if trial.state == optuna.trial.TrialState.COMPLETE]
     if not completed_trials:
@@ -506,12 +645,13 @@ def main():
     best_trial = study.best_trial
     print(f'Best trial: {best_trial.number}')
     print(f'Best val accuracy: {best_trial.value:.6f}')
-    print(f'Best parameters: {best_trial.params}')
+    print(f'Best parameters: {get_effective_best_params(best_trial.params, hpo_mode)}')
     print(f"Best config: {study_dir / 'best_config.yaml'}")
     print(f'Best checkpoint: {best_checkpoint_path}')
     print(f'Resume database: {storage_path}')
     if state_config is not None:
         print(f"W&B state artifact: {state_config['artifact_name']}:latest")
+
 
 if __name__ == '__main__':
     main()
