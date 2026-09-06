@@ -13,10 +13,10 @@ from packaging.requirements import Requirement
 
 # Change only this section between runs.
 REPO_URL = "https://github.com/inori6/rxrx1.git"
-GIT_REF = "master"
+GIT_REF = "3e1f6f0"
 RUN_MODE = "hpo"  # "train" or "hpo"
 CONFIGS = [
-    "configs/metric/hierarchical_metric_hpo.yaml"
+    "configs/embedding/celltype_film_hpo.yaml"
 ]
 
 # Kept for later optimizer or architecture HPO runs.
