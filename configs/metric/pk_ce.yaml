@@ -10,6 +10,7 @@ data:
 
   batch_size: 32
   num_workers: 4
+
   shuffle_train: true
   shuffle_val: false
   image_size: 384
@@ -22,8 +23,6 @@ model:
   name: efficientnet_b2
   pretrained: true
   dropout: 0.22
-  metadata:
-    enabled: true
 
 loss:
   name: cross_entropy
@@ -39,13 +38,79 @@ optimizer:
   fusion_lr_ratio: 3.0
   weight_decay: 0.0003
 
-metric:
-  enabled: false
-
 training:
   epochs: 20
+
+transform:
+  switch: true
+
+  train:
+    - name: resize
+      size: 384
+
+    - name: horizontal_flip
+      p: 0.5
+
+    - name: vertical_flip
+      p: 0.5
+
+    - name: random_90_rotation
+      p: 1.0
+
+  val:
+    - name: resize
+      size: 384
+
+  batch: []
+
+normalization:
+  enabled: true
+  method: zscore
+  eps: 0.000001
+  missing_group: error
+
+  reference:
+    population: NP
+    split_policy: train_only
+
+  statistics:
+    source: reference
+    grouping: plate
+    spatial: global
+    channel: shared
+    std_type: population
+
+  application:
+    position: before_resize
+
+  cache:
+    dir: outputs/normalization_stats
+    load: true
+    save: true
+    missing: compute
+
+metric:
+  enabled: false
 
 scheduler:
   name: cosine
   warmup_ratio: 0.05
   min_lr_ratio: 0.01
+
+logging:
+  level: INFO
+  log_dir: outputs/logs
+
+checkpoint:
+  enabled: true
+  dir: outputs/checkpoints
+  monitor: val_acc
+
+wandb:
+  enabled: true
+  project: rxrx1
+  mode: online
+  dir: outputs
+
+git_ref: null
+git_commit: null
