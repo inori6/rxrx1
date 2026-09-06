@@ -111,3 +111,4 @@ PROJECT_STRUCTURE.md
 /results/analysis/
 scripts/*.ps1
 kaggle/
+tests/

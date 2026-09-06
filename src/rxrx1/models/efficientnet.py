@@ -60,8 +60,12 @@ class EfficientNetWithMetadata(nn.Module):
         if dropout is not None:
             dropout = float(dropout)
             if not 0 <= dropout < 1:
-                raise ValueError(f"dropout must satisfy 0 <= dropout < 1, got {dropout}")
+                raise ValueError(
+                    f"dropout must satisfy 0 <= dropout < 1, got {dropout}"
+                )
             base_model.classifier[0].p = dropout
+
+        base_model.classifier[0].inplace = False
 
         self.features = base_model.features
         self.avgpool = base_model.avgpool
