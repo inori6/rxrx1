@@ -8,6 +8,41 @@ import torch
 from torch.utils.data import Dataset
 
 
+CELL_TYPE_TO_IDX = {
+    "HEPG2": 0,
+    "HUVEC": 1,
+    "RPE": 2,
+    "U2OS": 3,
+}
+
+WELL_ROW_MIN = ord("B")
+WELL_ROW_MAX = ord("O")
+WELL_COL_MIN = 2
+WELL_COL_MAX = 23
+
+
+def encode_cell_type(cell_type):
+    if cell_type not in CELL_TYPE_TO_IDX:
+        raise ValueError(f"Unknown cell type: {cell_type}")
+
+    return CELL_TYPE_TO_IDX[cell_type]
+
+
+def encode_well_position(well):
+    row = ord(well[0].upper())
+    col = int(well[1:])
+
+    relative_row = (
+        (row - WELL_ROW_MIN)
+        / (WELL_ROW_MAX - WELL_ROW_MIN)
+    )
+    relative_col = (
+        (col - WELL_COL_MIN)
+        / (WELL_COL_MAX - WELL_COL_MIN)
+    )
+
+    return relative_row, relative_col
+
 class RxRxDataset(Dataset):
     """Load one six-channel RxRx1 site from a manifest row."""
 
@@ -265,15 +300,41 @@ class RxRxDataset(Dataset):
         # 7. Return image + metadata
         # ========================================================
 
+        cell_type_idx = encode_cell_type(
+            row["cell_type"]
+        )
+
+        well_position = encode_well_position(
+            row["well"]
+        )
+
         return {
             "image": image,
             "label": torch.tensor(
                 label,
                 dtype=torch.long,
             ),
+
             "experiment": row["experiment"],
             "cell_type": row["cell_type"],
             "plate": int(row["plate"]),
             "well": row["well"],
             "site": int(row["site"]),
+
+            "cell_type_idx": torch.tensor(
+                cell_type_idx,
+                dtype=torch.long,
+            ),
+            "well_position": torch.tensor(
+                well_position,
+                dtype=torch.float32,
+            ),
         }
+
+if __name__ == "__main__":
+    print(encode_cell_type("HEPG2"))
+    print(encode_cell_type("U2OS"))
+
+    print(encode_well_position("B02"))
+    print(encode_well_position("O23"))
+    print(encode_well_position("H12"))

@@ -88,49 +88,40 @@ def _build_discriminative_groups(
             "to contain at least 9 stages."
         )
 
-    ratios = _parse_lr_ratio(
-        lr_ratio
-    )
+    ratios = _parse_lr_ratio(lr_ratio)
 
     lrs = [
         base_lr * ratio
         for ratio in ratios
     ]
 
+    head_params = list(model.classifier.parameters())
+
+    if getattr(model, "fusion", None) is not None:
+        head_params += list(model.fusion.parameters())
+
     return [
         {
-            "params": (
-                model.features[0:3]
-                .parameters()
-            ),
+            "params": model.features[0:3].parameters(),
             "lr": lrs[0],
             "group_name": "early",
         },
         {
-            "params": (
-                model.features[3:6]
-                .parameters()
-            ),
+            "params": model.features[3:6].parameters(),
             "lr": lrs[1],
             "group_name": "middle",
         },
         {
-            "params": (
-                model.features[6:9]
-                .parameters()
-            ),
+            "params": model.features[6:9].parameters(),
             "lr": lrs[2],
             "group_name": "late",
         },
         {
-            "params": (
-                model.classifier.parameters()
-            ),
+            "params": head_params,
             "lr": lrs[3],
             "group_name": "head",
         },
     ]
-
 
 def build_optimizer(
     model,

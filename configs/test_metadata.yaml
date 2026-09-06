@@ -1,5 +1,5 @@
 experiment:
-  name: test_np_plate_train_only
+  name: test
   seed: 0
 
 data:
@@ -21,6 +21,15 @@ data:
 model:
   name: efficientnet_b2
   pretrained: true
+  dropout: 0.22
+
+  metadata:
+    enabled: true
+    method: concat
+    cell_type: true
+    well_position: false
+    num_cell_types: 4
+    well_dim: 2
 
 loss:
   name: cross_entropy

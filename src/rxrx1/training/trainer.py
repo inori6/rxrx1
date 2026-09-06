@@ -18,6 +18,13 @@ from rxrx1.utils.tracking import (
 )
 
 
+def _prepare_metadata(batch, device):
+    return {
+        "cell_type_idx": batch["cell_type_idx"].to(device),
+        "well_position": batch["well_position"].to(device),
+    }
+
+
 def train_one_epoch(
     model,
     loader,
@@ -40,12 +47,9 @@ def train_one_epoch(
     )
 
     for batch in pbar:
-        images = batch["image"].to(
-            device
-        )
-        labels = batch["label"].to(
-            device
-        )
+        images = batch["image"].to(device)
+        labels = batch["label"].to(device)
+        metadata = _prepare_metadata(batch, device)
 
         if batch_normalizer is not None:
             images = batch_normalizer(
@@ -55,7 +59,7 @@ def train_one_epoch(
 
         optimizer.zero_grad()
 
-        outputs = model(images)
+        outputs = model(images, metadata)
         loss = criterion(
             outputs,
             labels,
@@ -117,12 +121,9 @@ def validate_one_epoch(
     )
 
     for batch in pbar:
-        images = batch["image"].to(
-            device
-        )
-        labels = batch["label"].to(
-            device
-        )
+        images = batch["image"].to(device)
+        labels = batch["label"].to(device)
+        metadata = _prepare_metadata(batch, device)
 
         if batch_normalizer is not None:
             images = batch_normalizer(
@@ -130,7 +131,7 @@ def validate_one_epoch(
                 batch,
             )
 
-        outputs = model(images)
+        outputs = model(images, metadata)
         loss = criterion(
             outputs,
             labels,

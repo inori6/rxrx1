@@ -225,9 +225,8 @@ def run_training(config, epoch_callback=None):
             name=config["model"]["name"],
             num_classes=len(label_to_index),
             pretrained=config["model"]["pretrained"],
-            dropout=config["model"].get(
-                "dropout"
-            ),
+            dropout=config["model"].get("dropout"),
+            metadata=config["model"].get("metadata"),
         ).to(device)
 
         criterion = build_criterion(
