@@ -1,0 +1,51 @@
+experiment:
+  name: classification_best_pk_ce
+  seed: 0
+
+data:
+  train_manifest: data/processed/splits/d1_train_treatment.csv
+  train_control_manifest: data/processed/splits/d1_train_control.csv
+  val_manifest: data/processed/splits/d1_val_treatment.csv
+  val_control_manifest: data/processed/splits/d1_val_control.csv
+
+  batch_size: 32
+  num_workers: 4
+  shuffle_train: true
+  shuffle_val: false
+  image_size: 384
+
+  pk_sampler:
+    enabled: true
+    k: 4
+
+model:
+  name: efficientnet_b2
+  pretrained: true
+  dropout: 0.22
+  metadata:
+    enabled: true
+
+loss:
+  name: cross_entropy
+
+optimizer:
+  name: adamw
+  base_lr: 7.562760031052943e-05
+  lr_ratio:
+    - 1.0
+    - 4.684416978885584
+    - 8.6406378065851
+    - 30.64707646122206
+  fusion_lr_ratio: 3.0
+  weight_decay: 0.0003
+
+metric:
+  enabled: false
+
+training:
+  epochs: 20
+
+scheduler:
+  name: cosine
+  warmup_ratio: 0.05
+  min_lr_ratio: 0.01

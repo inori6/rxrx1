@@ -16,8 +16,7 @@ REPO_URL = "https://github.com/inori6/rxrx1.git"
 GIT_REF = "master"
 RUN_MODE = "train"  # "train" or "hpo"
 CONFIGS = [
-    "configs/embedding/celltype_film.yaml",
-    "configs/embedding/well_film.yaml",
+    "configs/metric/pk_ce.yaml"
 ]
 
 # Kept for later optimizer or architecture HPO runs.
