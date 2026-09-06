@@ -15,7 +15,12 @@ from packaging.requirements import Requirement
 REPO_URL = "https://github.com/inori6/rxrx1.git"
 GIT_REF = "master"
 RUN_MODE = "train"  # "train" or "hpo"
-CONFIGS = ["configs/model_baseline_hpo_verify.yaml"]
+CONFIGS = [
+    "configs/mixup/model_baseline_hpo_third_best_mixup_beta_005.yaml",
+    "configs/mixup/model_baseline_hpo_third_best_mixup_beta_010.yaml",
+    "configs/mixup/model_baseline_hpo_third_best_mixup_beta_015.yaml",
+    "configs/mixup/model_baseline_hpo_third_best_mixup_beta_020.yaml",
+]
 
 # Kept for later optimizer or architecture HPO runs.
 HPO_SCRIPT = "scripts/hpo.py"
