@@ -75,6 +75,8 @@ class EfficientNetWithMetadata(nn.Module):
         metadata_enabled = bool(metadata.get("enabled", False))
 
         if metadata_enabled:
+            rng_state = torch.get_rng_state()
+
             self.fusion = MetadataFusion(
                 feature_dim=feature_dim,
                 method=metadata.get("method", "concat"),
@@ -83,6 +85,8 @@ class EfficientNetWithMetadata(nn.Module):
                 num_cell_types=metadata.get("num_cell_types", 4),
                 well_dim=metadata.get("well_dim", 2),
             )
+
+            torch.set_rng_state(rng_state)
             classifier_in = self.fusion.out_dim
         else:
             self.fusion = None

@@ -38,6 +38,7 @@ optimizer:
   - 4.684416978885584
   - 8.6406378065851
   - 30.64707646122206
+  fusion_lr_ratio: 3.0
 
 training:
   epochs: 20

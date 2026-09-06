@@ -16,9 +16,7 @@ REPO_URL = "https://github.com/inori6/rxrx1.git"
 GIT_REF = "master"
 RUN_MODE = "train"  # "train" or "hpo"
 CONFIGS = [
-    "configs/embedding/celltype_concat.yaml",
     "configs/embedding/celltype_film.yaml",
-    "configs/embedding/well_concat.yaml",
     "configs/embedding/well_film.yaml",
 ]
 

@@ -68,6 +68,7 @@ def _build_discriminative_groups(
     model,
     base_lr,
     lr_ratio,
+    fusion_lr_ratio=3.0,
 ):
     if not hasattr(model, "features"):
         raise ValueError(
@@ -95,12 +96,7 @@ def _build_discriminative_groups(
         for ratio in ratios
     ]
 
-    head_params = list(model.classifier.parameters())
-
-    if getattr(model, "fusion", None) is not None:
-        head_params += list(model.fusion.parameters())
-
-    return [
+    parameter_groups = [
         {
             "params": model.features[0:3].parameters(),
             "lr": lrs[0],
@@ -117,11 +113,27 @@ def _build_discriminative_groups(
             "group_name": "late",
         },
         {
-            "params": head_params,
+            "params": model.classifier.parameters(),
             "lr": lrs[3],
             "group_name": "head",
         },
     ]
+
+    fusion = getattr(model, "fusion", None)
+
+    if fusion is not None:
+        fusion_params = list(fusion.parameters())
+
+        if fusion_params:
+            parameter_groups.append(
+                {
+                    "params": fusion_params,
+                    "lr": base_lr * fusion_lr_ratio,
+                    "group_name": "fusion",
+                }
+            )
+
+    return parameter_groups
 
 def build_optimizer(
     model,
@@ -154,11 +166,19 @@ def build_optimizer(
             "lr_ratio"
         ]
 
+        fusion_lr_ratio = float(
+            optimizer_config.get(
+                "fusion_lr_ratio",
+                3.0,
+            )
+        )
+
         parameter_groups = (
             _build_discriminative_groups(
                 model=model,
                 base_lr=base_lr,
                 lr_ratio=lr_ratio,
+                fusion_lr_ratio=fusion_lr_ratio,
             )
         )
 
