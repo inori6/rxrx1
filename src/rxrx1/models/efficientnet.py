@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torchvision.models import (
     EfficientNet_B2_Weights,
     EfficientNet_B4_Weights,
@@ -10,10 +11,7 @@ from torchvision.models import (
 from rxrx1.models.metadata import MetadataFusion
 
 
-_BUILDERS = {
-    "efficientnet_b2": efficientnet_b2,
-    "efficientnet_b4": efficientnet_b4,
-}
+_BUILDERS = {"efficientnet_b2": efficientnet_b2, "efficientnet_b4": efficientnet_b4}
 
 _WEIGHTS = {
     "efficientnet_b2": EfficientNet_B2_Weights.DEFAULT,
@@ -47,6 +45,7 @@ class EfficientNetWithMetadata(nn.Module):
         pretrained=True,
         dropout=None,
         metadata=None,
+        metric=None,
     ):
         super().__init__()
 
@@ -61,9 +60,7 @@ class EfficientNetWithMetadata(nn.Module):
         if dropout is not None:
             dropout = float(dropout)
             if not 0 <= dropout < 1:
-                raise ValueError(
-                    f"dropout must satisfy 0 <= dropout < 1, got {dropout}"
-                )
+                raise ValueError(f"dropout must satisfy 0 <= dropout < 1, got {dropout}")
             base_model.classifier[0].p = dropout
 
         self.features = base_model.features
@@ -71,12 +68,28 @@ class EfficientNetWithMetadata(nn.Module):
 
         feature_dim = base_model.classifier[1].in_features
 
+        metric = metric or {}
+        self.projection = None
+        if metric.get("enabled", False):
+            dims = metric.get("projection_dims", [512, 128])
+            if not dims or any(not isinstance(d, int) or d <= 0 for d in dims):
+                raise ValueError("projection_dims must contain positive integers.")
+            # Keep classifier/fusion initialization independent of projection dimensions.
+            with torch.random.fork_rng(devices=[]):
+                layers = []
+                in_dim = feature_dim
+                for index, out_dim in enumerate(dims):
+                    layers.append(nn.Linear(in_dim, out_dim))
+                    if index < len(dims) - 1:
+                        layers.extend([nn.BatchNorm1d(out_dim), nn.SiLU()])
+                    in_dim = out_dim
+                self.projection = nn.Sequential(*layers)
+
         metadata = metadata or {}
         metadata_enabled = bool(metadata.get("enabled", False))
 
         if metadata_enabled:
             rng_state = torch.get_rng_state()
-
             self.fusion = MetadataFusion(
                 feature_dim=feature_dim,
                 method=metadata.get("method", "concat"),
@@ -85,7 +98,6 @@ class EfficientNetWithMetadata(nn.Module):
                 num_cell_types=metadata.get("num_cell_types", 4),
                 well_dim=metadata.get("well_dim", 2),
             )
-
             torch.set_rng_state(rng_state)
             classifier_in = self.fusion.out_dim
         else:
@@ -93,23 +105,26 @@ class EfficientNetWithMetadata(nn.Module):
             classifier_in = feature_dim
 
         self.classifier = nn.Sequential(
-            base_model.classifier[0],
-            nn.Linear(classifier_in, num_classes),
+            base_model.classifier[0], nn.Linear(classifier_in, num_classes)
         )
 
-    def forward(self, x, metadata=None):
+    def forward(self, x, metadata=None, return_embeddings=False):
         x = self.features(x)
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
 
+        if return_embeddings:
+            if self.projection is None:
+                raise ValueError("Enable metric projection before requesting embeddings.")
+            z = F.normalize(self.projection(x), dim=1)
+
         if self.fusion is not None:
             if metadata is None:
-                raise ValueError(
-                    "metadata is required when metadata fusion is enabled"
-                )
+                raise ValueError("metadata is required when metadata fusion is enabled")
             x = self.fusion(x, metadata)
 
-        return self.classifier(x)
+        logits = self.classifier(x)
+        return (logits, z) if return_embeddings else logits
 
 
 def build_efficientnet(
@@ -118,6 +133,7 @@ def build_efficientnet(
     pretrained=True,
     dropout=None,
     metadata=None,
+    metric=None,
 ):
     return EfficientNetWithMetadata(
         name=name,
@@ -125,6 +141,7 @@ def build_efficientnet(
         pretrained=pretrained,
         dropout=dropout,
         metadata=metadata,
+        metric=metric,
     )
 
 
@@ -133,20 +150,12 @@ if __name__ == "__main__":
 
     metadata = {
         "cell_type_idx": torch.tensor([0, 3]),
-        "well_position": torch.tensor([
-            [0.0, 0.0],
-            [1.0, 1.0],
-        ]),
+        "well_position": torch.tensor([[0.0, 0.0], [1.0, 1.0]]),
     }
 
     model = build_efficientnet(
         pretrained=False,
-        metadata={
-            "enabled": True,
-            "method": "concat",
-            "cell_type": True,
-            "well_position": True,
-        },
+        metadata={"enabled": True, "method": "concat", "cell_type": True, "well_position": True},
     )
 
     output = model(x, metadata)

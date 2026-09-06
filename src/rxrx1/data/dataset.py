@@ -8,12 +8,7 @@ import torch
 from torch.utils.data import Dataset
 
 
-CELL_TYPE_TO_IDX = {
-    "HEPG2": 0,
-    "HUVEC": 1,
-    "RPE": 2,
-    "U2OS": 3,
-}
+CELL_TYPE_TO_IDX = {"HEPG2": 0, "HUVEC": 1, "RPE": 2, "U2OS": 3}
 
 WELL_ROW_MIN = ord("B")
 WELL_ROW_MAX = ord("O")
@@ -32,28 +27,23 @@ def encode_well_position(well):
     row = ord(well[0].upper())
     col = int(well[1:])
 
-    relative_row = (
-        (row - WELL_ROW_MIN)
-        / (WELL_ROW_MAX - WELL_ROW_MIN)
-    )
-    relative_col = (
-        (col - WELL_COL_MIN)
-        / (WELL_COL_MAX - WELL_COL_MIN)
-    )
+    relative_row = (row - WELL_ROW_MIN) / (WELL_ROW_MAX - WELL_ROW_MIN)
+    relative_col = (col - WELL_COL_MIN) / (WELL_COL_MAX - WELL_COL_MIN)
 
     return relative_row, relative_col
+
 
 class RxRxDataset(Dataset):
     """Load one six-channel RxRx1 site from a manifest row."""
 
     def __init__(
-            self,
-            manifest: pd.DataFrame,
-            image_root: str | Path,
-            label_to_index: dict,
-            transform: Optional[Callable] = None,
-            normalizer: Optional[Callable] = None,
-            validate_paths: bool = False,
+        self,
+        manifest: pd.DataFrame,
+        image_root: str | Path,
+        label_to_index: dict,
+        transform: Optional[Callable] = None,
+        normalizer: Optional[Callable] = None,
+        validate_paths: bool = False,
     ):
         self.manifest = manifest.copy().reset_index(drop=True)
         self.image_root = Path(image_root)
@@ -61,21 +51,30 @@ class RxRxDataset(Dataset):
         self.transform = transform
         self.normalizer = normalizer
 
-        required_columns = {
-            "experiment",
-            "plate",
-            "well",
-            "site",
-            "sirna",
-            "cell_type",
-        }
+        required_columns = {"experiment", "plate", "well", "site", "sirna", "cell_type"}
         missing_columns = required_columns - set(self.manifest.columns)
 
         if missing_columns:
-            raise ValueError(
-                "Manifest is missing required columns: "
-                f"{sorted(missing_columns)}"
+            raise ValueError(f"Manifest is missing required columns: {sorted(missing_columns)}")
+
+        # Older manifests lack id_code; reconstruct the original well identity (not site).
+        if "id_code" not in self.manifest:
+            self.manifest["id_code"] = (
+                self.manifest["experiment"].astype(str)
+                + "_"
+                + self.manifest["plate"].astype(int).astype(str)
+                + "_"
+                + self.manifest["well"].astype(str)
             )
+        if self.manifest["id_code"].isna().any():
+            raise ValueError("id_code cannot contain missing values.")
+        identity = self.manifest.groupby("id_code")[["sirna", "cell_type"]].nunique()
+        if (identity > 1).any().any():
+            raise ValueError("Each id_code must identify one treatment and cell type.")
+        self.sample_to_index = {
+            code: i for i, code in enumerate(sorted(self.manifest["id_code"].unique()))
+        }
+        self.manifest["sample_idx"] = self.manifest["id_code"].map(self.sample_to_index)
 
         unknown_labels = set(self.manifest["sirna"]) - set(self.label_to_index)
 
@@ -93,8 +92,7 @@ class RxRxDataset(Dataset):
 
         if unknown_labels:
             raise ValueError(
-                f"Manifest contains {len(unknown_labels)} labels "
-                "not present in label_to_index."
+                f"Manifest contains {len(unknown_labels)} labels not present in label_to_index."
             )
 
     def __len__(self):
@@ -116,9 +114,7 @@ class RxRxDataset(Dataset):
             image = cv2.imread(str(image_path), cv2.IMREAD_UNCHANGED)
 
             if image is None:
-                raise FileNotFoundError(
-                    f"Unable to read image: {image_path}"
-                )
+                raise FileNotFoundError(f"Unable to read image: {image_path}")
 
             if image.ndim != 2:
                 raise ValueError(
@@ -131,10 +127,7 @@ class RxRxDataset(Dataset):
         channel_shapes = {image.shape for image in channels}
 
         if len(channel_shapes) != 1:
-            raise ValueError(
-                "The six channels have different shapes: "
-                f"{sorted(channel_shapes)}"
-            )
+            raise ValueError(f"The six channels have different shapes: {sorted(channel_shapes)}")
 
         # Output shape: height × width × 6
         return np.stack(channels, axis=-1)
@@ -153,39 +146,21 @@ class RxRxDataset(Dataset):
             preview = "\n".join(missing_paths[:10])
 
             raise FileNotFoundError(
-                f"{len(missing_paths)} images are missing.\n"
-                f"First missing paths:\n{preview}"
+                f"{len(missing_paths)} images are missing.\nFirst missing paths:\n{preview}"
             )
 
     def __getitem__(self, index: int):
         row = self.manifest.iloc[index]
 
-        # ========================================================
-        # 1. Load raw six-channel image
-        # ========================================================
-
         image = self._load_six_channels(row)
 
         # HWC -> CHW
-        image = (
-            torch.from_numpy(image)
-            .permute(2, 0, 1)
-            .float()
-        )
-
-        # ========================================================
-        # 2. Resolve image-level normalization position
-        # ========================================================
+        image = torch.from_numpy(image).permute(2, 0, 1).float()
 
         normalizer_position = None
 
         if self.normalizer is not None:
-
-            apply_to = getattr(
-                self.normalizer,
-                "apply_to",
-                "image",
-            )
+            apply_to = getattr(self.normalizer, "apply_to", "image")
 
             if apply_to != "image":
                 raise ValueError(
@@ -194,92 +169,18 @@ class RxRxDataset(Dataset):
                     "Batch-level normalizers must be applied in the trainer."
                 )
 
-            normalizer_position = getattr(
-                self.normalizer,
-                "position",
-                "before_resize",
-            )
+            normalizer_position = getattr(self.normalizer, "position", "before_resize")
 
-            if normalizer_position not in {
-                "before_resize",
-                "after_resize",
-            }:
-                raise ValueError(
-                    "Unsupported normalization position: "
-                    f"{normalizer_position!r}."
-                )
+            if normalizer_position not in {"before_resize", "after_resize"}:
+                raise ValueError(f"Unsupported normalization position: {normalizer_position!r}.")
 
-        # ========================================================
-        # 3. Normalization BEFORE resize
-        # ========================================================
-        #
-        # Current experiment:
-        #
-        # raw image
-        #     ↓
-        # normalization
-        #     ↓
-        # resize / augmentation
-        #
-
-        if (
-                self.normalizer is not None
-                and normalizer_position == "before_resize"
-        ):
-            image = self.normalizer(
-                image,
-                row,
-            )
-
-        # ========================================================
-        # 4. Transform pipeline
-        # ========================================================
-        #
-        # Currently this may include:
-        #
-        # resize
-        # flip
-        # rotation
-        # brightness
-        # ...
-        #
+        if self.normalizer is not None and normalizer_position == "before_resize":
+            image = self.normalizer(image, row)
 
         if self.transform is not None:
             image = self.transform(image)
 
-        # ========================================================
-        # 5. after_resize is NOT applied here yet
-        # ========================================================
-        #
-        # Important:
-        #
-        # self.transform may contain BOTH resize and augmentation.
-        #
-        # Therefore doing:
-        #
-        #     transform(image)
-        #     normalization(image)
-        #
-        # would actually mean:
-        #
-        #     resize
-        #     augmentation
-        #     normalization
-        #
-        # which is NOT the intended:
-        #
-        #     resize
-        #     normalization
-        #     augmentation
-        #
-        # We deliberately reject it until resize and augmentation
-        # are separated in the transform pipeline.
-        #
-
-        if (
-                self.normalizer is not None
-                and normalizer_position == "after_resize"
-        ):
+        if self.normalizer is not None and normalizer_position == "after_resize":
             raise NotImplementedError(
                 "normalization.position='after_resize' requires "
                 "the resize step to be separated from augmentation. "
@@ -288,48 +189,26 @@ class RxRxDataset(Dataset):
                 "it after augmentation."
             )
 
-        # ========================================================
-        # 6. Label
-        # ========================================================
+        label = self.label_to_index[row["sirna"]]
 
-        label = self.label_to_index[
-            row["sirna"]
-        ]
+        cell_type_idx = encode_cell_type(row["cell_type"])
 
-        # ========================================================
-        # 7. Return image + metadata
-        # ========================================================
-
-        cell_type_idx = encode_cell_type(
-            row["cell_type"]
-        )
-
-        well_position = encode_well_position(
-            row["well"]
-        )
+        well_position = encode_well_position(row["well"])
 
         return {
             "image": image,
-            "label": torch.tensor(
-                label,
-                dtype=torch.long,
-            ),
-
+            "id_code": row["id_code"],
+            "sample_idx": torch.tensor(row["sample_idx"], dtype=torch.long),
+            "label": torch.tensor(label, dtype=torch.long),
             "experiment": row["experiment"],
             "cell_type": row["cell_type"],
             "plate": int(row["plate"]),
             "well": row["well"],
             "site": int(row["site"]),
-
-            "cell_type_idx": torch.tensor(
-                cell_type_idx,
-                dtype=torch.long,
-            ),
-            "well_position": torch.tensor(
-                well_position,
-                dtype=torch.float32,
-            ),
+            "cell_type_idx": torch.tensor(cell_type_idx, dtype=torch.long),
+            "well_position": torch.tensor(well_position, dtype=torch.float32),
         }
+
 
 if __name__ == "__main__":
     print(encode_cell_type("HEPG2"))
