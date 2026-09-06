@@ -2680,6 +2680,8 @@ def _build_reference_loader(
     return DataLoader(
         stats_dataset,
         batch_size=batch_size,
+        # Fitting reference stats must not consume the training RNG state.
+        generator=torch.Generator().manual_seed(int((config.get("experiment") or {}).get("seed", 0))),
 
         # Statistics fitting must be deterministic with
         # respect to membership. Order does not matter.
@@ -3195,4 +3197,3 @@ __all__ = [
     "ChannelStandardNormalizer",
     "build_normalizer",
 ]
-

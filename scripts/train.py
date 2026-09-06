@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 
 from rxrx1.data.dataset import RxRxDataset
 from rxrx1.data.manifest import create_label_to_index, read_manifest
-from rxrx1.data.transforms import prepare_transforms
+from rxrx1.data.transforms import prepare_transforms, build_batch_transform
 from rxrx1.data.normalization import build_normalizer
 from rxrx1.models.efficientnet import build_efficientnet
 from rxrx1.training.criterion import build_criterion
@@ -126,6 +126,20 @@ def run_training(config, epoch_callback=None):
         train_transform, val_transform = (
             prepare_transforms(config)
         )
+
+        transform_config = config.get("transform") or {}
+        batch_config = (transform_config.get("batch") or []) if transform_config.get("switch") else []
+        if batch_config and (config["model"].get("metadata") or {}).get("enabled", False):
+            raise ValueError("Batch mixing requires metadata fusion to be disabled.")
+        train_batch_transform = build_batch_transform(batch_config, len(label_to_index))
+        train_acc_definition = "mixed_target_weight_at_prediction" if batch_config else "hard_label_accuracy"
+        logger.info("Training batch transforms: %s", batch_config)
+        logger.info("train/acc definition: %s", train_acc_definition)
+        if run is not None:
+            run.config.update({
+                "effective_batch_transforms": batch_config,
+                "train_acc_definition": train_acc_definition,
+            })
 
         train_normalizer = build_normalizer(
             config,
@@ -281,6 +295,7 @@ def run_training(config, epoch_callback=None):
                 val_batch_normalizer
             ),
             epoch_callback=epoch_callback,
+            train_batch_transform=train_batch_transform,
         )
 
         log_training_finished(

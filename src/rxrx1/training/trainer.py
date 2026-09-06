@@ -33,6 +33,7 @@ def train_one_epoch(
     device,
     scheduler=None,
     batch_normalizer=None,
+    batch_transform=None,
 ):
     model.train()
 
@@ -57,13 +58,14 @@ def train_one_epoch(
                 batch,
             )
 
+        targets = labels
+        if batch_transform is not None:
+            images, targets = batch_transform(images, labels)
+
         optimizer.zero_grad()
 
         outputs = model(images, metadata)
-        loss = criterion(
-            outputs,
-            labels,
-        )
+        loss = criterion(outputs, targets)
 
         loss.backward()
         optimizer.step()
@@ -78,10 +80,12 @@ def train_one_epoch(
             * batch_size
         )
 
-        total_correct += (
-            outputs.argmax(dim=1)
-            == labels
-        ).sum().item()
+        predictions = outputs.argmax(dim=1)
+        if targets.ndim == 2:
+            # Credit each prediction by its weight in the mixed target.
+            total_correct += targets.gather(1, predictions[:, None]).sum().item()
+        else:
+            total_correct += (predictions == targets).sum().item()
 
         total_samples += batch_size
 
@@ -182,6 +186,7 @@ def fit_model(
     train_batch_normalizer=None,
     val_batch_normalizer=None,
     epoch_callback=None,
+    train_batch_transform=None,
 ):
     if epochs <= 0:
         raise ValueError(
@@ -212,6 +217,7 @@ def fit_model(
                 batch_normalizer=(
                     train_batch_normalizer
                 ),
+                batch_transform=train_batch_transform,
             )
         )
 
