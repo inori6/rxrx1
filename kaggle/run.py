@@ -16,7 +16,9 @@ REPO_URL = "https://github.com/inori6/rxrx1.git"
 GIT_REF = "master"
 RUN_MODE = "train"  # "train" or "hpo"
 CONFIGS = [
-    "configs/cutmix/cutmix_alpha_100.yaml"
+    "configs/cutmix/cutmix_alpha_050.yaml",
+    "configs/cutmix/cutmix_alpha_100_seed118.yaml",
+    "configs/mixup/mixup_beta_010_seed118.yaml"
 ]
 
 # Kept for later optimizer or architecture HPO runs.
