@@ -426,17 +426,15 @@ def upload_hpo_state(
     wandb_dir = project_root / state_config['dir']
     wandb_dir.mkdir(parents=True, exist_ok=True)
     with wandb.init(
-        project=state_config['project'],
-        entity=state_config['entity'],
-        id=state_config['state_run_id'],
-        name=f'{safe_name(study.study_name)}_state',
-        job_type='hpo-state',
-        resume='allow',
-        mode='online',
-        dir=str(wandb_dir),
-        config={'study_name': study.study_name, 'artifact_name': state_config['artifact_name']},
+            project=state_config["project"],
+            entity=state_config["entity"],
+            name=f"{safe_name(study.study_name)}_state",
+            job_type="hpo-state",
+            mode="online",
+            dir=str(wandb_dir),
+            config={"study_name": study.study_name, "artifact_name": state_config["artifact_name"]},
     ) as run:
-        run.log_artifact(artifact, aliases=['latest'])
+        run.log_artifact(artifact, aliases=["latest"])
     print(f"Uploaded HPO state to W&B: {state_config['artifact_name']}:latest")
 
 
