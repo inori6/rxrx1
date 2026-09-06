@@ -1,6 +1,7 @@
 experiment:
-  name: mixup_beta_010_seed118
-  seed: 118
+  name: embedding_celltype_film
+  seed: 0
+
 data:
   train_manifest: data/processed/splits/d1_train_treatment.csv
   train_control_manifest: data/processed/splits/d1_train_control.csv
@@ -11,12 +12,23 @@ data:
   shuffle_train: true
   shuffle_val: false
   image_size: 384
+
 model:
   name: efficientnet_b2
   pretrained: true
   dropout: 0.22
+
+  metadata:
+    enabled: true
+    method: film
+    cell_type: true
+    well_position: false
+    num_cell_types: 4
+    well_dim: 2
+
 loss:
   name: cross_entropy
+
 optimizer:
   name: adamw
   weight_decay: 0.0003
@@ -26,10 +38,13 @@ optimizer:
   - 4.684416978885584
   - 8.6406378065851
   - 30.64707646122206
+
 training:
   epochs: 20
+
 transform:
   switch: true
+
   train:
   - name: resize
     size: 384
@@ -39,50 +54,56 @@ transform:
     p: 0.5
   - name: random_90_rotation
     p: 1.0
-  batch:
-  - name: mixup
-    alpha: 0.1
-    p: 1.0
+
   val:
   - name: resize
     size: 384
+
 normalization:
   enabled: true
   method: zscore
   eps: 1.0e-06
   missing_group: error
+
   reference:
     population: NP
     split_policy: train_only
+
   statistics:
     source: reference
     grouping: plate
     spatial: global
     channel: shared
     std_type: population
+
   application:
     position: before_resize
+
   cache:
     dir: outputs/normalization_stats
     load: true
     save: true
     missing: compute
+
 logging:
   level: INFO
   log_dir: outputs/logs
+
 checkpoint:
   enabled: true
   dir: outputs/checkpoints
   monitor: val_acc
+
 wandb:
   enabled: true
   project: rxrx1
   mode: online
   dir: outputs
+
 git_ref: null
 git_commit: null
+
 scheduler:
   name: cosine
   warmup_ratio: 0.05
   min_lr_ratio: 0.01
-
