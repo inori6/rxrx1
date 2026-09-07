@@ -17,8 +17,17 @@ GIT_REF = "master"
 RUN_MODE = "train"
 
 CONFIGS = [
-    'configs/film_position/celltype_film_mid.yaml',
+    # 1. Champion-neck control
+    "configs/embedding/concat_neck_control_d2.yaml",
 
+    # 2. Metadata concat
+    "configs/embedding/celltype_concat_neck_d2.yaml",
+    "configs/embedding/well_concat_neck_d2.yaml",
+    "configs/embedding/celltype_well_concat_neck_d2.yaml",
+
+    # 3. ArcFace comparison
+    "configs/first_place/efficientnet_b2_arc_d2.yaml",
+    "configs/first_place/densenet161_arc_d2.yaml",
 ]
 
 HPO_SCRIPT = "scripts/hpo_fusion.py"
@@ -27,7 +36,8 @@ HPO_TIMEOUT_HOURS = 5.5
 HPO_MAX_TRIALS = 10
 
 WORK_DIR = Path("/kaggle/working")
-PROJECT_DIR = WORK_DIR / "rxrx1"
+PROJECT_DIR = WORK_DIR / "rxrx1-compare_with_1st"
+
 WANDB_KEY_CANDIDATES = [
     Path("/kaggle/input/datasets/maributa/rxrx1-wandb-secret/wandb_api_key.txt"),
     Path("/kaggle/input/rxrx1-wandb-secret/wandb_api_key.txt"),

@@ -11,7 +11,7 @@ from rxrx1.data.sampler import PKBatchSampler
 from rxrx1.data.manifest import create_label_to_index, read_manifest
 from rxrx1.data.transforms import prepare_transforms, build_batch_transform
 from rxrx1.data.normalization import build_normalizer
-from rxrx1.models.efficientnet import build_efficientnet
+from rxrx1.models.factory import build_model
 from rxrx1.training.criterion import build_criterion
 from rxrx1.training.optimizers import build_optimizer
 from rxrx1.training.schedulers import build_scheduler
@@ -187,12 +187,9 @@ def run_training(config, epoch_callback=None):
             pin_memory=torch.cuda.is_available(),
         )
 
-        model = build_efficientnet(
-            name=config["model"]["name"],
+        model = build_model(
+            model_config=config["model"],
             num_classes=len(label_to_index),
-            pretrained=config["model"]["pretrained"],
-            dropout=config["model"].get("dropout"),
-            metadata=config["model"].get("metadata"),
             metric=metric_config,
         ).to(device)
 

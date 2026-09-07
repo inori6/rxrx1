@@ -27,6 +27,9 @@ def train_one_epoch(
     batch_transform=None,
 ):
     metric_enabled = getattr(criterion, "metric_enabled", False)
+    arcface_enabled = getattr(criterion, "arcface_enabled", False)
+    if metric_enabled and arcface_enabled:
+        raise ValueError("Hierarchical metric loss and first-place ArcFace cannot be enabled together.")
     if metric_enabled and batch_transform is not None:
         raise ValueError(
             "Metric supervision requires unmixed observations; disable batch_transform/MixUp/CutMix."
@@ -56,6 +59,9 @@ def train_one_epoch(
         if metric_enabled:
             outputs, embeddings = model(images, metadata, return_embeddings=True)
             loss = criterion(outputs, targets, embeddings, batch)
+        elif arcface_enabled:
+            outputs, arc_logits = model(images, metadata, return_arc_logits=True)
+            loss = criterion(outputs, targets, arc_logits)
         else:
             outputs = model(images, metadata)
             loss = criterion(outputs, targets)

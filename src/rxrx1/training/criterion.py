@@ -2,6 +2,7 @@ import math
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from rxrx1.training.pairs import (
     all_pair_indices,
@@ -62,10 +63,72 @@ class ClassificationMetricLoss(nn.Module):
         return loss
 
 
+class DenseCrossEntropy(nn.Module):
+    def forward(self, logits, targets):
+        if targets.ndim == 1:
+            return F.cross_entropy(logits, targets)
+        logprobs = F.log_softmax(logits.float(), dim=-1)
+        return (-logprobs * targets.float()).sum(-1).mean()
+
+
+class ArcFaceLoss(nn.Module):
+    def __init__(self, s=30.0, m=0.5, divisor=2.0):
+        super().__init__()
+        if not math.isfinite(s) or s <= 0:
+            raise ValueError("ArcFace scale must be positive and finite.")
+        if not math.isfinite(m) or m <= 0:
+            raise ValueError("ArcFace margin must be positive and finite.")
+        if not math.isfinite(divisor) or divisor <= 0:
+            raise ValueError("ArcFace divisor must be positive and finite.")
+        self.s = s
+        self.divisor = divisor
+        self.cos_m = math.cos(m)
+        self.sin_m = math.sin(m)
+        self.th = math.cos(math.pi - m)
+        self.mm = math.sin(math.pi - m) * m
+        self.ce = DenseCrossEntropy()
+
+    def forward(self, cosine, targets):
+        cosine = cosine.float()
+        if targets.ndim == 1:
+            targets = F.one_hot(targets, num_classes=cosine.shape[1]).float()
+        else:
+            targets = targets.float()
+
+        sine = torch.sqrt((1.0 - cosine.square()).clamp_min(0.0))
+        phi = cosine * self.cos_m - sine * self.sin_m
+        phi = torch.where(cosine > self.th, phi, cosine - self.mm)
+        output = (targets * phi) + ((1.0 - targets) * cosine)
+        return self.ce(output * self.s, targets) / self.divisor
+
+
+class ClassificationArcFaceLoss(nn.Module):
+    arcface_enabled = True
+
+    def __init__(self, metric_loss_coeff=0.2, s=30.0, m=0.5, divisor=2.0):
+        super().__init__()
+        if not math.isfinite(metric_loss_coeff) or not 0 <= metric_loss_coeff <= 1:
+            raise ValueError("metric_loss_coeff must be finite and between 0 and 1.")
+        self.metric_loss_coeff = metric_loss_coeff
+        self.ce = DenseCrossEntropy()
+        self.arcface = ArcFaceLoss(s=s, m=m, divisor=divisor)
+
+    def forward(self, logits, targets, arc_logits=None):
+        ce_loss = self.ce(logits, targets)
+        # Validation/inference keeps the public first-place classification path:
+        # raw embedding -> independent FC head, with no ArcFace branch required.
+        if arc_logits is None:
+            return ce_loss
+        metric_loss = self.arcface(arc_logits, targets)
+        coeff = self.metric_loss_coeff
+        return ce_loss * (1.0 - coeff) + metric_loss * coeff
+
+
 def build_criterion(config):
     loss_config = config["loss"]
+    loss_name = loss_config["name"].lower()
 
-    if loss_config["name"].lower() == "cross_entropy":
+    if loss_name == "cross_entropy":
         metric = config.get("metric") or {}
         if metric.get("enabled", False):
             return ClassificationMetricLoss(
@@ -73,5 +136,13 @@ def build_criterion(config):
                 **{key: metric[key] for key in ("wt", "wc", "alpha", "min_pairs") if key in metric},
             )
         return nn.CrossEntropyLoss()
+
+    if loss_name == "first_place_arcface":
+        return ClassificationArcFaceLoss(
+            metric_loss_coeff=loss_config.get("metric_loss_coeff", 0.2),
+            s=loss_config.get("arcface_scale", 30.0),
+            m=loss_config.get("arcface_margin", 0.5),
+            divisor=loss_config.get("arcface_divisor", 2.0),
+        )
 
     raise ValueError(f"Unsupported loss: {loss_config['name']}")
