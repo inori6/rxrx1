@@ -17,17 +17,8 @@ GIT_REF = "master"
 RUN_MODE = "train"
 
 CONFIGS = [
-    # 1. Champion-neck control
-    "configs/embedding/concat_neck_control_d2.yaml",
-
-    # 2. Metadata concat
-    "configs/embedding/celltype_concat_neck_d2.yaml",
-    "configs/embedding/well_concat_neck_d2.yaml",
-    "configs/embedding/celltype_well_concat_neck_d2.yaml",
-
-    # 3. ArcFace comparison
-    "configs/first_place/efficientnet_b2_arc_d2.yaml",
-    "configs/first_place/densenet161_arc_d2.yaml",
+    "configs/metric/hierarchical_metric_trial16_rerun_d2.yaml",
+    "configs/metric/hierarchical_metric_trial18_rerun_d2.yaml"
 ]
 
 HPO_SCRIPT = "scripts/hpo_fusion.py"
