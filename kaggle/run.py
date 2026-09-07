@@ -13,17 +13,18 @@ from packaging.requirements import Requirement
 
 # Change only this section between runs.
 REPO_URL = "https://github.com/inori6/rxrx1.git"
-GIT_REF = "3e1f6f0"
-RUN_MODE = "hpo"  # "train" or "hpo"
+GIT_REF = "master"
+RUN_MODE = "train"
+
 CONFIGS = [
-    "configs/embedding/celltype_film_hpo.yaml"
+    'configs/film_position/celltype_film_mid.yaml',
+
 ]
 
-# Kept for later optimizer or architecture HPO runs.
-HPO_SCRIPT = "scripts/hpo.py"
-HPO_STUDY_NAME = "hierarchical_metric_hpo"
-HPO_TIMEOUT_HOURS = 10.5
-HPO_MAX_TRIALS = 50
+HPO_SCRIPT = "scripts/hpo_fusion.py"
+HPO_STUDY_NAME = "well_film_lr_hpo"
+HPO_TIMEOUT_HOURS = 5.5
+HPO_MAX_TRIALS = 10
 
 WORK_DIR = Path("/kaggle/working")
 PROJECT_DIR = WORK_DIR / "rxrx1"

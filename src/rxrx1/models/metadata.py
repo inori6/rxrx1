@@ -66,6 +66,8 @@ class MetadataFusion(nn.Module):
                 concat_metadata.append(cell)
             else:
                 gamma, beta = self.cell_film(cell).chunk(2, dim=1)
+                shape = (*gamma.shape, *((1,) * (x.ndim - 2)))
+                gamma, beta = gamma.reshape(shape), beta.reshape(shape)
                 x = (1 + gamma) * x + beta
 
         if self.use_well_position:
@@ -75,6 +77,8 @@ class MetadataFusion(nn.Module):
                 concat_metadata.append(well)
             else:
                 gamma, beta = self.well_film(well).chunk(2, dim=1)
+                shape = (*gamma.shape, *((1,) * (x.ndim - 2)))
+                gamma, beta = gamma.reshape(shape), beta.reshape(shape)
                 x = (1 + gamma) * x + beta
 
         if self.method == "concat":

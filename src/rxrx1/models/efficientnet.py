@@ -91,11 +91,20 @@ class EfficientNetWithMetadata(nn.Module):
 
         metadata = metadata or {}
         metadata_enabled = bool(metadata.get("enabled", False))
+        self.fusion_feature_index = metadata.get("feature_index")
+        fusion_dim = feature_dim
+        if self.fusion_feature_index is not None:
+            if not metadata_enabled or metadata.get("method", "concat") != "film":
+                raise ValueError("metadata.feature_index requires enabled FiLM fusion")
+            index = self.fusion_feature_index
+            if type(index) is not int or not 1 <= index < len(self.features) - 1:
+                raise ValueError("metadata.feature_index must select an MBConv stage (1–7)")
+            fusion_dim = self.features[index][-1].out_channels
 
         if metadata_enabled:
             rng_state = torch.get_rng_state()
             self.fusion = MetadataFusion(
-                feature_dim=feature_dim,
+                feature_dim=fusion_dim,
                 method=metadata.get("method", "concat"),
                 cell_type=metadata.get("cell_type", False),
                 well_position=metadata.get("well_position", False),
@@ -103,7 +112,7 @@ class EfficientNetWithMetadata(nn.Module):
                 well_dim=metadata.get("well_dim", 2),
             )
             torch.set_rng_state(rng_state)
-            classifier_in = self.fusion.out_dim
+            classifier_in = feature_dim if self.fusion_feature_index is not None else self.fusion.out_dim
         else:
             self.fusion = None
             classifier_in = feature_dim
@@ -113,7 +122,15 @@ class EfficientNetWithMetadata(nn.Module):
         )
 
     def forward(self, x, metadata=None, return_embeddings=False):
-        x = self.features(x)
+        if self.fusion is not None and metadata is None:
+            raise ValueError("metadata is required when metadata fusion is enabled")
+        if self.fusion_feature_index is None:
+            x = self.features(x)
+        else:
+            for index, stage in enumerate(self.features):
+                x = stage(x)
+                if index == self.fusion_feature_index:
+                    x = self.fusion(x, metadata)
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
 
@@ -122,9 +139,7 @@ class EfficientNetWithMetadata(nn.Module):
                 raise ValueError("Enable metric projection before requesting embeddings.")
             z = F.normalize(self.projection(x), dim=1)
 
-        if self.fusion is not None:
-            if metadata is None:
-                raise ValueError("metadata is required when metadata fusion is enabled")
+        if self.fusion is not None and self.fusion_feature_index is None:
             x = self.fusion(x, metadata)
 
         logits = self.classifier(x)
