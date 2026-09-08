@@ -1,0 +1,71 @@
+experiment:
+  name: tta_basic_eff_d29
+  seed: 0
+
+data:
+  train_manifest: data/processed/splits/d2_9exp_train_treatment.csv
+  train_control_manifest: data/processed/splits/d2_9exp_train_control.csv
+  val_manifest: data/processed/splits/d2_9exp_val_treatment.csv
+  val_control_manifest: data/processed/splits/d2_9exp_val_control.csv
+  image_size: 384
+  batch_size: 32
+  num_workers: 4
+  shuffle_train: true
+  shuffle_val: false
+
+model:
+  name: efficientnet_b2
+  pretrained: true
+  dropout: 0.22
+
+transform:
+  switch: true
+  train:
+    - name: resize
+      size: 384
+    - name: horizontal_flip
+      p: 0.5
+    - name: vertical_flip
+      p: 0.5
+    - name: random_90_rotation
+      p: 1.0
+  val:
+    - name: resize
+      size: 384
+  batch: []
+
+normalization:
+  enabled: true
+  method: zscore
+  eps: 0.000001
+  missing_group: error
+  reference:
+    population: NP
+    split_policy: train_only
+  statistics:
+    source: reference
+    grouping: plate
+    spatial: global
+    channel: shared
+    std_type: population
+  application:
+    position: before_resize
+  cache:
+    dir: outputs/normalization_stats
+    load: true
+    save: true
+    missing: compute
+
+metric:
+  enabled: false
+
+inference:
+  checkpoint: outputs/checkpoints/classification_d29/best.pt
+  site_aggregation: mean_logits
+
+  tta:
+    enabled: true
+    mode: d4
+
+  lsa:
+    enabled: false
