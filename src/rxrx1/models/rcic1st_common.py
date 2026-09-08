@@ -6,16 +6,24 @@ import torch.nn.functional as F
 
 
 class ChampionNeck(nn.Sequential):
-    def __init__(self, in_features, embedding_size=1024, bn_momentum=0.05):
-        super().__init__(
+    def __init__(self, in_features, embedding_size=1024, bn_momentum=0.05, neck_layers=2):
+        if neck_layers not in {1, 2}:
+            raise ValueError("neck_layers must be 1 or 2.")
+
+        layers = [
             nn.BatchNorm1d(in_features, momentum=bn_momentum),
             nn.Linear(in_features, embedding_size, bias=False),
             nn.ReLU(inplace=True),
             nn.BatchNorm1d(embedding_size, momentum=bn_momentum),
-            nn.Linear(embedding_size, embedding_size, bias=False),
-            nn.BatchNorm1d(embedding_size, momentum=bn_momentum),
-        )
+        ]
 
+        if neck_layers == 2:
+            layers += [
+                nn.Linear(embedding_size, embedding_size, bias=False),
+                nn.BatchNorm1d(embedding_size, momentum=bn_momentum),
+            ]
+
+        super().__init__(*layers)
 
 class ArcMarginProduct(nn.Module):
     def __init__(self, in_features, out_features):

@@ -9,13 +9,14 @@ from rxrx1.models.rcic1st_common import ChampionNeck
 
 class EfficientNetB2MetricNeck(nn.Module):
     def __init__(
-        self,
-        num_classes=1108,
-        pretrained=True,
-        dropout=0.22,
-        embedding_size=1024,
-        bn_momentum=0.05,
-        metric=None,
+            self,
+            num_classes=1108,
+            pretrained=True,
+            dropout=0.22,
+            embedding_size=1024,
+            bn_momentum=0.05,
+            neck_layers=2,
+            metric=None,
     ):
         super().__init__()
 
@@ -36,6 +37,7 @@ class EfficientNetB2MetricNeck(nn.Module):
                 feature_dim,
                 embedding_size=embedding_size,
                 bn_momentum=bn_momentum,
+                neck_layers=neck_layers,
             ),
             dropout_layer,
             nn.Linear(embedding_size, num_classes),
@@ -123,6 +125,7 @@ def build_efficientnet_metric_neck(
     dropout=0.22,
     embedding_size=1024,
     bn_momentum=0.05,
+    neck_layers=2,
     metric=None,
 ):
     return EfficientNetB2MetricNeck(
@@ -131,5 +134,6 @@ def build_efficientnet_metric_neck(
         dropout=dropout,
         embedding_size=embedding_size,
         bn_momentum=bn_momentum,
+        neck_layers=neck_layers,
         metric=metric,
     )

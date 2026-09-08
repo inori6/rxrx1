@@ -16,6 +16,7 @@ def build_model(model_config, num_classes, metric=None):
             pretrained=model_config.get("pretrained", True),
             dropout=model_config.get("dropout"),
             metadata=model_config.get("metadata"),
+            pooled_metadata=model_config.get("pooled_metadata"),
             metric=metric,
         )
 
@@ -53,6 +54,7 @@ def build_model(model_config, num_classes, metric=None):
             dropout=model_config.get("dropout", 0.22),
             embedding_size=model_config.get("embedding_size", 1024),
             bn_momentum=model_config.get("bn_momentum", 0.05),
+            neck_layers=model_config.get("neck_layers", 2),
             metric=metric,
         )
 
