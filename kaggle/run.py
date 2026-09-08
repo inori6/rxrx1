@@ -17,8 +17,7 @@ GIT_REF = "master"
 RUN_MODE = "train"
 
 CONFIGS = [
-    "configs/metric/hierarchical_metric_trial16_rerun_d2.yaml",
-    "configs/metric/hierarchical_metric_trial18_rerun_d2.yaml"
+    "configs/metric/hierarchical_metric_trial16_neck_d2.yaml"
 ]
 
 HPO_SCRIPT = "scripts/hpo_fusion.py"
