@@ -5,6 +5,7 @@ from torchvision.models import EfficientNet_B2_Weights, efficientnet_b2
 
 from rxrx1.models.efficientnet import _replace_input_conv
 from rxrx1.models.rcic1st_common import ChampionNeck
+from rxrx1.models.metadata import MetadataFusion
 
 
 class EfficientNetB2MetricNeck(nn.Module):
@@ -17,6 +18,7 @@ class EfficientNetB2MetricNeck(nn.Module):
             bn_momentum=0.05,
             neck_layers=2,
             metric=None,
+            metadata=None,
     ):
         super().__init__()
 
@@ -31,6 +33,21 @@ class EfficientNetB2MetricNeck(nn.Module):
         dropout_layer = base.classifier[0]
         dropout_layer.p = float(dropout)
         dropout_layer.inplace = False
+
+        metadata = metadata or {}
+        self.fusion = None
+        if metadata.get("enabled", False):
+            if metadata.get("method", "concat") != "concat":
+                raise ValueError("Metric neck metadata only supports concat.")
+            self.fusion = MetadataFusion(
+                feature_dim=feature_dim,
+                method="concat",
+                cell_type=metadata.get("cell_type", False),
+                well_position=metadata.get("well_position", False),
+                num_cell_types=metadata.get("num_cell_types", 4),
+                well_dim=metadata.get("well_dim", 2),
+            )
+            feature_dim = self.fusion.out_dim
 
         self.classifier = nn.ModuleList([
             ChampionNeck(
@@ -96,6 +113,10 @@ class EfficientNetB2MetricNeck(nn.Module):
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
 
+        if self.fusion is not None:
+            if metadata is None:
+                raise ValueError("metadata is required when concat is enabled")
+            x = self.fusion(x, metadata)
         x = self.neck(x)
 
         if return_embeddings:
@@ -127,6 +148,7 @@ def build_efficientnet_metric_neck(
     bn_momentum=0.05,
     neck_layers=2,
     metric=None,
+    metadata=None,
 ):
     return EfficientNetB2MetricNeck(
         num_classes=num_classes,
@@ -136,4 +158,5 @@ def build_efficientnet_metric_neck(
         bn_momentum=bn_momentum,
         neck_layers=neck_layers,
         metric=metric,
+        metadata=metadata,
     )

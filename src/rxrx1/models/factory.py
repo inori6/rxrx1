@@ -55,7 +55,9 @@ def build_model(model_config, num_classes, metric=None):
             embedding_size=model_config.get("embedding_size", 1024),
             bn_momentum=model_config.get("bn_momentum", 0.05),
             neck_layers=model_config.get("neck_layers", 2),
+            metadata=model_config.get("metadata"),
             metric=metric,
         )
 
     raise ValueError(f"Unsupported model: {name}")
+
