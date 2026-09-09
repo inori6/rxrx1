@@ -1,0 +1,180 @@
+experiment:
+  name: final_hierarchical_b4_hpo
+  seed: 0
+
+data:
+  train_manifest: data/processed/splits/hpo_1108_train_treatment.csv
+  train_control_manifest: data/processed/splits/hpo_1108_train_control.csv
+
+  val_manifest: data/processed/splits/hpo_1108_val_treatment.csv
+  val_control_manifest: data/processed/splits/hpo_1108_val_control.csv
+
+  image_size: 384
+  batch_size: 32
+  num_workers: 4
+
+  shuffle_train: true
+  shuffle_val: false
+
+  pk_sampler:
+    enabled: true
+    k: 4
+
+
+model:
+  name: efficientnet_b4_metric_neck
+
+  pretrained: true
+
+  dropout: 0.22
+
+  embedding_size: 1024
+
+  bn_momentum: 0.05
+
+  neck_layers: 1
+
+  metadata:
+    enabled: true
+
+    method: concat
+
+    cell_type: true
+    well_position: true
+
+    num_cell_types: 4
+    well_dim: 2
+
+
+loss:
+  name: cross_entropy
+
+
+optimizer:
+  name: adamw
+
+  base_lr: 5.0e-5
+
+  weight_decay: 3.0e-4
+
+  lr_ratio:
+    - 1.0
+    - 4.684416978885584
+    - 8.6406378065851
+    - 30.0
+
+  neck_lr_ratio: 10.0
+
+  fusion_lr_ratio: 3.0
+
+
+scheduler:
+  name: cosine
+
+  warmup_ratio: 0.05
+
+  min_lr_ratio: 0.01
+
+
+training:
+  epochs: 12
+
+
+normalization:
+  enabled: true
+
+  method: zscore
+
+  eps: 1.0e-6
+
+  missing_group: error
+
+  reference:
+    population: NP
+    split_policy: train_only
+
+  statistics:
+    source: reference
+
+    grouping: global
+
+    spatial: global
+
+    channel: shared
+
+    std_type: population
+
+  application:
+    position: before_resize
+
+  cache:
+    dir: outputs/normalization_stats
+
+    load: true
+    save: true
+
+    missing: compute
+
+
+transform:
+  switch: true
+
+  train:
+    - name: resize
+      size: 384
+
+    - name: horizontal_flip
+      p: 0.5
+
+    - name: vertical_flip
+      p: 0.5
+
+    - name: random_90_rotation
+      p: 1.0
+
+  val:
+    - name: resize
+      size: 384
+
+  batch: []
+
+
+metric:
+  enabled: true
+
+  lambda_metric: 0.05
+
+  wt: 0.7141292228460144
+  wc: 0.2858707771539856
+
+  alpha: 0.9425686126605016
+
+  min_pairs: 8
+
+  projection_dims:
+    - 512
+    - 128
+
+
+checkpoint:
+  enabled: true
+
+  dir: outputs/checkpoints
+
+  monitor: val_acc
+
+
+logging:
+  level: INFO
+
+  log_dir: outputs/logs
+
+
+wandb:
+  enabled: true
+
+  project: rxrx1
+
+  mode: online
+
+  dir: outputs

@@ -47,14 +47,27 @@ def build_model(model_config, num_classes, metric=None):
             metadata=model_config.get("metadata"),
         )
 
-    if name == "efficientnet_b2_metric_neck":
+    if name in {
+        "efficientnet_b2_metric_neck",
+        "efficientnet_b4_metric_neck",
+    }:
         return build_efficientnet_metric_neck(
+            name=name,
             num_classes=num_classes,
             pretrained=model_config.get("pretrained", True),
             dropout=model_config.get("dropout", 0.22),
-            embedding_size=model_config.get("embedding_size", 1024),
-            bn_momentum=model_config.get("bn_momentum", 0.05),
-            neck_layers=model_config.get("neck_layers", 2),
+            embedding_size=model_config.get(
+                "embedding_size",
+                1024,
+            ),
+            bn_momentum=model_config.get(
+                "bn_momentum",
+                0.05,
+            ),
+            neck_layers=model_config.get(
+                "neck_layers",
+                1,
+            ),
             metadata=model_config.get("metadata"),
             metric=metric,
         )
