@@ -2043,10 +2043,18 @@ class ReferenceZScoreNormalizer:
 
     def __call__(self, image: torch.Tensor, metadata: Any) -> torch.Tensor:
         key = get_group_key(metadata, self.grouping)
-        if key not in self.stats and self.missing_group == "global":
-            key = _GLOBAL_KEY
-        return _normalize_with_stats(image, self.stats.get(key), self.eps)
 
+        if key not in self.stats:
+            if self.missing_group == "global":
+                key = _GLOBAL_KEY
+            else:
+                raise KeyError(
+                    f"Missing normalization statistics for group {key!r} "
+                    f"with grouping={self.grouping!r}; "
+                    "global fallback is disabled by missing_group='error'."
+                )
+
+        return _normalize_with_stats(image, self.stats.get(key), self.eps)
 
 class LoaderBatchZScoreNormalizer:
     apply_to = "batch"
@@ -2998,22 +3006,17 @@ def build_normalizer(
                     # ------------------------------------------------
 
                     if policy == "train_only":
+                        train_stats = get_reference_stats("train", supplied_stats=stats)
 
-                        train_stats = get_reference_stats(
-                            "train",
-                            supplied_stats=stats,
-                        )
-
-                        if _GLOBAL_KEY not in train_stats:
+                        if grouping == "global" and _GLOBAL_KEY not in train_stats:
                             raise KeyError(
-                                "train_only validation requires "
-                                "pooled train global statistics."
+                                "train_only validation with grouping='global' "
+                                "requires pooled train global statistics."
                             )
 
                         runtime_stats = train_stats
-                        runtime_grouping = "global"
-
-                        reference_scope = "train_global"
+                        runtime_grouping = grouping
+                        reference_scope = "train_group"
 
 
                     # ------------------------------------------------
