@@ -28,22 +28,22 @@ RATIO_BOUNDS = {
 }
 
 CLASSIFICATION_HPO_SPACE_VERSION = "focused-layer-lrs-v1"
-HPO_SPACE_VERSION = "final-hierarchical-b4-v1"
+HPO_SPACE_VERSION="final-hierarchical-b4-focused-v2"
 
-METRIC_BOUNDS = {
-    "base_lr": (3e-5, 8e-5, True),
-    "head_ratio": (15.0, 40.0, True),
-    "neck_lr_ratio": (5.0, 20.0, True),
-    "fusion_lr_ratio": (1.5, 6.0, True),
-    "weight_decay": (1e-4, 8e-4, True),
-    "dropout": (0.15, 0.30, False),
-    "lambda_metric": (0.02, 0.15, True),
+METRIC_BOUNDS={
+    "base_lr":(4.5e-5,6.0e-5,True),
+    "middle_ratio":(3.8,5.5,True),
+    "late_ratio":(7.0,11.0,True),
+    "head_ratio":(26.0,36.0,True),
+    "neck_lr_ratio":(10.0,18.0,True),
+    "fusion_lr_ratio":(1.8,3.5,True),
+    "weight_decay":(1e-4,3e-4,True),
+    "dropout":(0.25,0.38,False),
+    "lambda_metric":(0.03,0.07,True),
+    "wt":(0.60,1.00,False),
+    "alpha":(0.70,1.00,False),
 }
 
-FIXED_MIDDLE_RATIO = 4.684416978885584
-FIXED_LATE_RATIO = 8.6406378065851
-FIXED_WT = 0.7141292228460144
-FIXED_ALPHA = 0.9425686126605016
 
 
 def parse_args():
@@ -99,19 +99,20 @@ def apply_trial_params(config, params, hpo_mode=None):
     optimizer["base_lr"] = float(params["base_lr"])
 
     if hpo_mode == "metric":
-        optimizer["lr_ratio"] = [1.0, FIXED_MIDDLE_RATIO, FIXED_LATE_RATIO, float(params["head_ratio"])]
+        optimizer["lr_ratio"]=[1.0,float(params["middle_ratio"]),float(params["late_ratio"]),float(params["head_ratio"])]
         optimizer["neck_lr_ratio"] = float(params["neck_lr_ratio"])
         optimizer["fusion_lr_ratio"] = float(params["fusion_lr_ratio"])
         optimizer["weight_decay"] = float(params["weight_decay"])
         config.setdefault("model", {})["dropout"] = float(params["dropout"])
 
         metric = config.setdefault("metric", {})
+        wt = float(params["wt"])
         metric.update({
             "enabled": True,
             "lambda_metric": float(params["lambda_metric"]),
-            "wt": FIXED_WT,
-            "wc": 1.0 - FIXED_WT,
-            "alpha": FIXED_ALPHA,
+            "wt": wt,
+            "wc": 1.0 - wt,
+            "alpha": float(params["alpha"]),
         })
         return
 
@@ -133,8 +134,8 @@ def get_group_lrs(params, hpo_mode="classification"):
         head_lr = base_lr * float(params["head_ratio"])
         return {
             "early_lr": base_lr,
-            "middle_lr": base_lr * FIXED_MIDDLE_RATIO,
-            "late_lr": base_lr * FIXED_LATE_RATIO,
+            "middle_lr":base_lr*float(params["middle_ratio"]),
+            "late_lr":base_lr*float(params["late_ratio"]),
             "head_lr": head_lr,
             "projection_lr": head_lr,
             "neck_lr": base_lr * float(params["neck_lr_ratio"]),
@@ -205,34 +206,28 @@ def validate_study_space(study, expected_distributions, space_version):
     study.set_user_attr("hpo_space_version", space_version)
 
 
-def enqueue_initial_trials(study, hpo_mode):
-    if hpo_mode != "metric" or study.trials:
-        return 0
-
-    reference = {
-        "base_lr": 5e-5,
-        "head_ratio": 30.0,
-        "neck_lr_ratio": 10.0,
-        "fusion_lr_ratio": 3.0,
-        "weight_decay": 3e-4,
-        "dropout": 0.22,
-    }
-
-    for lambda_metric in (0.03, 0.05, 0.10):
-        study.enqueue_trial({**reference, "lambda_metric": lambda_metric})
-    return 3
+def enqueue_initial_trials(study,hpo_mode):
+    if hpo_mode!="metric" or study.trials:return 0
+    study.enqueue_trial({
+        "base_lr": 5.138340850683981e-05,
+        "middle_ratio": 4.684416978885584,
+        "late_ratio": 8.6406378065851,
+        "head_ratio": 31.514789628881243,
+        "neck_lr_ratio": 13.624907820609392,
+        "fusion_lr_ratio": 2.4891812249513174,
+        "weight_decay": 0.00015883625393345446,
+        "dropout": 0.2979206389969634,
+        "lambda_metric": 0.04507083758472812,
+        "wt": 0.7141292228460144,
+        "alpha": 0.9425686126605016,
+    })
+    return 1
 
 
 def get_effective_best_params(params, hpo_mode):
     effective = dict(params)
     if hpo_mode == "metric":
-        effective.update({
-            "middle_ratio": FIXED_MIDDLE_RATIO,
-            "late_ratio": FIXED_LATE_RATIO,
-            "wt": FIXED_WT,
-            "wc": 1.0 - FIXED_WT,
-            "alpha": FIXED_ALPHA,
-        })
+        effective.update({"wc":1.0-float(params["wt"])})
     return effective
 
 
@@ -308,7 +303,7 @@ def load_sampler(sampler_path):
         print(f"Restored Optuna sampler from: {sampler_path}")
         return sampler
 
-    return optuna.samplers.TPESampler(seed=0, n_startup_trials=5, multivariate=True)
+    return optuna.samplers.TPESampler(seed=0,n_startup_trials=3,multivariate=True)
 
 
 def save_sampler(study, sampler_path):
