@@ -1,0 +1,138 @@
+experiment:
+  name: lsa_trial5
+  seed: 0
+data:
+  train_manifest: data/processed/splits/hpo_1108_train_treatment.csv
+  train_control_manifest: data/processed/splits/hpo_1108_train_control.csv
+  val_manifest: data/processed/splits/hpo_1108_val_treatment.csv
+  val_control_manifest: data/processed/splits/hpo_1108_val_control.csv
+  image_size: 384
+  batch_size: 32
+  num_workers: 4
+  shuffle_train: true
+  shuffle_val: false
+  pk_sampler:
+    enabled: true
+    k: 4
+model:
+  name: efficientnet_b4_metric_neck
+  pretrained: true
+  dropout: 0.2979206389969634
+  embedding_size: 1024
+  bn_momentum: 0.05
+  neck_layers: 1
+  metadata:
+    enabled: true
+    method: concat
+    cell_type: true
+    well_position: true
+    num_cell_types: 4
+    well_dim: 2
+loss:
+  name: cross_entropy
+optimizer:
+  name: adamw
+  base_lr: 5.138340850683981e-05
+  weight_decay: 0.00015883625393345446
+  lr_ratio:
+  - 1.0
+  - 4.684416978885584
+  - 8.6406378065851
+  - 31.514789628881243
+  neck_lr_ratio: 13.624907820609392
+  fusion_lr_ratio: 2.4891812249513174
+scheduler:
+  name: cosine
+  warmup_ratio: 0.05
+  min_lr_ratio: 0.01
+training:
+  epochs: 12
+normalization:
+  enabled: true
+  method: zscore
+  eps: 1.0e-06
+  missing_group: error
+  reference:
+    population: NP
+    split_policy: train_only
+  statistics:
+    source: reference
+    grouping: global
+    spatial: global
+    channel: shared
+    std_type: population
+  application:
+    position: before_resize
+  cache:
+    dir: outputs/normalization_stats
+    load: true
+    save: true
+    missing: compute
+transform:
+  switch: true
+  train:
+  - name: resize
+    size: 384
+  - name: horizontal_flip
+    p: 0.5
+  - name: vertical_flip
+    p: 0.5
+  - name: random_90_rotation
+    p: 1.0
+  val:
+  - name: resize
+    size: 384
+  batch: []
+metric:
+  enabled: true
+  lambda_metric: 0.04507083758472812
+  wt: 0.7141292228460144
+  wc: 0.28587077715398557
+  alpha: 0.9425686126605016
+  min_pairs: 8
+  projection_dims:
+  - 512
+  - 128
+checkpoint:
+  enabled: true
+  dir: outputs/checkpoints
+  monitor: val_acc
+logging:
+  level: INFO
+  log_dir: outputs/logs
+wandb:
+  enabled: true
+  project: rxrx1
+  mode: online
+  dir: outputs
+hpo:
+  study_name: final_hierarchical_b4_global_hpo_v2
+  trial_number: 5
+  base_experiment: final_hierarchical_b4_hpo
+  objective: best_val_acc
+  early_lr: 5.138340850683981e-05
+  middle_lr: 0.00024070131124245435
+  late_lr: 0.00044398542217540654
+  head_lr: 0.0016193373095079234
+  projection_lr: 0.0016193373095079234
+  neck_lr: 0.000700094204414409
+  fusion_lr: 0.00012790261572922945
+  base_lr: 5.138340850683981e-05
+  head_ratio: 31.514789628881243
+  neck_lr_ratio: 13.624907820609392
+  fusion_lr_ratio: 2.4891812249513174
+  weight_decay: 0.00015883625393345446
+  dropout: 0.2979206389969634
+  lambda_metric: 0.04507083758472812
+  middle_ratio: 4.684416978885584
+  late_ratio: 8.6406378065851
+  wt: 0.7141292228460144
+  wc: 0.28587077715398557
+  alpha: 0.9425686126605016
+inference:
+  checkpoint: outputs/checkpoints/final_hierarchical_b4_global_hpo_v2_trial-0005/best.pt
+  site_aggregation: mean_logits
+  tta:
+    enabled: false
+  lsa:
+    enabled: true
