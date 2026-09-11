@@ -46,20 +46,42 @@ class ClassificationMetricLoss(nn.Module):
         self.ce = nn.CrossEntropyLoss()
         self.metric = HierarchicalMetricLoss(**kwargs)
 
+    def classification_loss(self, logits, targets):
+        if targets.ndim == 1:
+            return F.cross_entropy(logits, targets)
+
+        logprobs = F.log_softmax(logits.float(), dim=-1)
+
+        return (
+                -logprobs * targets.float()
+        ).sum(dim=-1).mean()
+
+    def metric_loss(self, embeddings, labels, batch):
+        if labels.ndim != 1:
+            raise ValueError("Metric labels must be hard class indices.")
+
+        return self.metric(
+            embeddings,
+            labels,
+            batch["cell_type_idx"].to(embeddings.device),
+            batch["sample_idx"].to(embeddings.device),
+        )
+
     def forward(self, logits, targets, embeddings=None, batch=None):
-        loss = self.ce(logits, targets)
-        # Two-argument interface remains CE-only for validation/inference callers.
+        loss = self.classification_loss(logits, targets)
+
         if embeddings is not None and self.metric_enabled:
             if batch is None or targets.ndim != 1:
                 raise ValueError(
                     "Metric supervision requires original hard labels and sample metadata."
                 )
-            loss = loss + self.lambda_metric * self.metric(
+
+            loss = loss + self.lambda_metric * self.metric_loss(
                 embeddings,
                 targets,
-                batch["cell_type_idx"].to(logits.device),
-                batch["sample_idx"].to(logits.device),
+                batch,
             )
+
         return loss
 
 

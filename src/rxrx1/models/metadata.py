@@ -53,6 +53,23 @@ class MetadataFusion(nn.Module):
             else feature_dim
         )
 
+    def _mix_value(self, value, metadata):
+        permutation = metadata.get("_mix_permutation")
+
+        if permutation is None:
+            return value
+
+        lam = torch.as_tensor(
+            metadata["_mix_lam"],
+            device=value.device,
+            dtype=value.dtype,
+        )
+
+        return (
+                lam * value
+                + (1.0 - lam) * value[permutation]
+        )
+
     def forward(self, x, metadata):
         concat_metadata = []
 
@@ -61,6 +78,8 @@ class MetadataFusion(nn.Module):
                 metadata["cell_type_idx"].long(),
                 num_classes=self.num_cell_types,
             ).float()
+
+            cell = self._mix_value(cell, metadata)
 
             if self.method == "concat":
                 concat_metadata.append(cell)
@@ -72,6 +91,7 @@ class MetadataFusion(nn.Module):
 
         if self.use_well_position:
             well = metadata["well_position"].float()
+            well = self._mix_value(well, metadata)
 
             if self.method == "concat":
                 concat_metadata.append(well)

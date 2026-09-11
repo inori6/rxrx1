@@ -1,65 +1,28 @@
 from dataclasses import dataclass
 
-
 @dataclass
 class TrainingResults:
     final_train_loss: float | None = None
     final_train_acc: float | None = None
     final_val_loss: float | None = None
     final_val_acc: float | None = None
-
     best_epoch: int = 0
     best_train_loss: float | None = None
     best_train_acc: float | None = None
     best_val_loss: float | None = None
-    best_val_acc: float = float("-inf")
-
+    best_val_acc: float | None = None
     runtime_per_epoch_minutes: float | None = None
 
-
-    def update_epoch(
-        self,
-        epoch,
-        train_loss,
-        train_acc,
-        val_loss,
-        val_acc,
-    ):
-        # -----------------------
-        # Final result
-        # -----------------------
-
-        self.final_train_loss = train_loss
-        self.final_train_acc = train_acc
-        self.final_val_loss = val_loss
-        self.final_val_acc = val_acc
-
-        # -----------------------
-        # Best result
-        # -----------------------
-
-        if val_acc <= self.best_val_acc:
-            return False
-
+    def update_epoch(self, epoch, train_loss, train_acc, val_loss=None, val_acc=None):
+        self.final_train_loss, self.final_train_acc = train_loss, train_acc
+        self.final_val_loss, self.final_val_acc = val_loss, val_acc
+        if val_acc is None: return False
+        if self.best_val_acc is not None and val_acc <= self.best_val_acc: return False
         self.best_epoch = epoch
-
-        self.best_train_loss = train_loss
-        self.best_train_acc = train_acc
-
-        self.best_val_loss = val_loss
-        self.best_val_acc = val_acc
-
+        self.best_train_loss, self.best_train_acc = train_loss, train_acc
+        self.best_val_loss, self.best_val_acc = val_loss, val_acc
         return True
 
-
     def set_runtime(self, epoch_runtimes):
-        if not epoch_runtimes:
-            raise ValueError(
-                "Cannot calculate runtime: no epochs were executed."
-            )
-
-        self.runtime_per_epoch_minutes = (
-            sum(epoch_runtimes)
-            / len(epoch_runtimes)
-            / 60
-        )
+        if not epoch_runtimes: raise ValueError("Cannot calculate runtime: no epochs were executed.")
+        self.runtime_per_epoch_minutes = sum(epoch_runtimes) / len(epoch_runtimes) / 60

@@ -39,47 +39,17 @@ def log_label_revised(logger, train_labels, original_val_labels,val_labels):
     )
 
 
-def log_training_started(
-    logger,
-    device,
-    train_samples,
-    val_samples,
-):
-    logger.info(
-        "Training started | "
-        "device=%s | "
-        "train_samples=%d | "
-        "val_samples=%d",
-        device,
-        train_samples,
-        val_samples,
-    )
+def log_training_started(logger, device, train_samples, val_samples=None):
+    if val_samples is None:
+        logger.info("Training started | device=%s | train_samples=%d | validation=disabled", device, train_samples)
+    else:
+        logger.info("Training started | device=%s | train_samples=%d | val_samples=%d", device, train_samples, val_samples)
 
-
-def log_epoch_result(
-    logger,
-    epoch,
-    train_loss,
-    train_acc,
-    val_loss,
-    val_acc,
-    runtime_minutes,
-):
-    logger.info(
-        "Epoch %d | "
-        "train_loss=%.4f | "
-        "train_acc=%.4f | "
-        "val_loss=%.4f | "
-        "val_acc=%.4f | "
-        "runtime=%.2f min",
-        epoch,
-        train_loss,
-        train_acc,
-        val_loss,
-        val_acc,
-        runtime_minutes,
-    )
-
+def log_epoch_result(logger, epoch, train_loss, train_acc, val_loss, val_acc, runtime_minutes):
+    if val_acc is None:
+        logger.info("Epoch %d | train_loss=%.4f | train_acc=%.4f | runtime=%.2f min", epoch, train_loss, train_acc, runtime_minutes)
+    else:
+        logger.info("Epoch %d | train_loss=%.4f | train_acc=%.4f | val_loss=%.4f | val_acc=%.4f | runtime=%.2f min", epoch, train_loss, train_acc, val_loss, val_acc, runtime_minutes)
 
 def log_best_checkpoint(
     logger,
@@ -98,32 +68,19 @@ def log_best_checkpoint(
     )
 
 
-def log_training_finished(
-    logger,
-    results,
-):
+def log_training_finished(logger, results):
+    if results.final_val_acc is None:
+        logger.info(
+            "Training finished | final_train_acc=%.4f | final_train_loss=%.4f | runtime_per_epoch_minutes=%.2f",
+            results.final_train_acc, results.final_train_loss, results.runtime_per_epoch_minutes,
+        )
+        return
     logger.info(
-        "Training finished | "
-        "final_train_acc=%.4f | "
-        "final_train_loss=%.4f | "
-        "final_val_acc=%.4f | "
-        "final_val_loss=%.4f | "
-        "best_epoch=%d | "
-        "best_train_acc=%.4f | "
-        "best_train_loss=%.4f | "
-        "best_val_acc=%.4f | "
-        "best_val_loss=%.4f | "
-        "runtime_per_epoch_minutes=%.2f",
-        results.final_train_acc,
-        results.final_train_loss,
-        results.final_val_acc,
-        results.final_val_loss,
-        results.best_epoch,
-        results.best_train_acc,
-        results.best_train_loss,
-        results.best_val_acc,
-        results.best_val_loss,
-        results.runtime_per_epoch_minutes,
+        "Training finished | final_train_acc=%.4f | final_train_loss=%.4f | final_val_acc=%.4f | final_val_loss=%.4f | "
+        "best_epoch=%d | best_train_acc=%.4f | best_train_loss=%.4f | best_val_acc=%.4f | best_val_loss=%.4f | runtime_per_epoch_minutes=%.2f",
+        results.final_train_acc, results.final_train_loss, results.final_val_acc, results.final_val_loss,
+        results.best_epoch, results.best_train_acc, results.best_train_loss,
+        results.best_val_acc, results.best_val_loss, results.runtime_per_epoch_minutes,
     )
 
 

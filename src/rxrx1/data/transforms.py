@@ -729,29 +729,31 @@ class CutMix:
         return (
             mixed_images,
             mixed_targets,
+            {
+                "permutation": permutation,
+                "lam": lam_adjusted,
+            },
         )
 
 
 class BatchCompose:
-    def __init__(
-        self,
-        transforms_list,
-    ):
+    def __init__(self, transforms_list):
         self.transforms = transforms_list
 
-    def __call__(
-        self,
-        images,
-        targets,
-    ):
+    def __call__(self, images, targets):
+        mix_info = None
+
         for transform in self.transforms:
-            images, targets = transform(
-                images,
-                targets,
-            )
+            images, targets, current_mix_info = transform(images, targets)
 
-        return images, targets
+            if current_mix_info is not None:
+                if mix_info is not None:
+                    raise ValueError(
+                        "Only one active batch-mixing transform is supported."
+                    )
+                mix_info = current_mix_info
 
+        return images, targets, mix_info
 
 def build_batch_transform(
     transform_config: list[dict],

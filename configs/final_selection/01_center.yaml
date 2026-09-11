@@ -1,0 +1,127 @@
+experiment:
+  name: final_select_center
+  seed: 0
+
+data:
+  train_manifest: data/processed/splits/full_all_treatment.csv
+  train_control_manifest: data/processed/splits/full_all_control.csv
+  image_size: 512
+  batch_size: 32
+  num_workers: 4
+  shuffle_train: true
+  pk_sampler:
+    enabled: true
+    k: 4
+
+model:
+  name: efficientnet_b4_metric_neck
+  pretrained: true
+  dropout: 0.28
+  embedding_size: 1024
+  bn_momentum: 0.05
+  neck_layers: 1
+  metadata:
+    enabled: true
+    method: concat
+    cell_type: true
+    well_position: true
+    num_cell_types: 4
+    well_dim: 2
+
+loss:
+  name: cross_entropy
+
+optimizer:
+  name: adamw
+  base_lr: 5.70e-5
+  weight_decay: 1.75e-4
+  lr_ratio: [1.0, 4.5, 8.5, 30.0]
+  neck_lr_ratio: 14.0
+  fusion_lr_ratio: 2.8
+
+scheduler:
+  name: cosine
+  warmup_ratio: 0.05
+  min_lr_ratio: 0.01
+
+training:
+  validation: false
+  epochs: 35
+  stop_after_epoch: 7
+  resume_from: null
+  train_acc_checkpoint:
+    enabled: true
+    threshold: 0.90
+
+normalization:
+  enabled: true
+  method: zscore
+  eps: 1.0e-6
+  missing_group: error
+  reference:
+    population: NP
+    split_policy: train_only
+  statistics:
+    source: reference
+    grouping: global
+    spatial: global
+    channel: shared
+    std_type: population
+  application:
+    position: before_resize
+  cache:
+    dir: outputs/normalization_stats/final_full
+    load: true
+    save: true
+    missing: compute
+
+transform:
+  switch: true
+  train:
+    - name: resize
+      size: 512
+    - name: horizontal_flip
+      p: 0.5
+    - name: vertical_flip
+      p: 0.5
+    - name: random_90_rotation
+      p: 1.0
+    - name: channel_intensity_jitter
+      scale_mean: 1.0
+      scale_std: 0.075
+      shift_mean: 0.0
+      shift_std: 0.075
+      p: 1.0
+    - name: channel_dropout
+      p: 0.15
+      max_channels: 1
+  val:
+    - name: resize
+      size: 512
+  batch:
+    - name: cutmix
+      alpha: 1.0
+      p: 1.0
+
+metric:
+  enabled: true
+  lambda_metric: 0.055
+  wt: 0.65
+  wc: 0.35
+  alpha: 0.94
+  min_pairs: 8
+  projection_dims: [512, 128]
+
+checkpoint:
+  enabled: true
+  dir: outputs/checkpoints
+
+logging:
+  level: INFO
+  log_dir: outputs/logs
+
+wandb:
+  enabled: true
+  project: rxrx1
+  mode: online
+  dir: outputs
