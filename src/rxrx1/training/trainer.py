@@ -15,6 +15,9 @@ def _prepare_metadata(batch, device):
         "well_position": batch["well_position"].to(device),
     }
 
+def _autocast(device, enabled):
+    return torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=enabled)
+
 def _prepare_mixed_metadata(metadata, mix_info):
     if mix_info is None:
         return metadata
@@ -25,40 +28,22 @@ def _prepare_mixed_metadata(metadata, mix_info):
         "_mix_lam": mix_info["lam"],
     }
 
-def train_one_epoch(
-    model,
-    loader,
-    optimizer,
-    criterion,
-    device,
-    scheduler=None,
-    batch_normalizer=None,
-    batch_transform=None,
-):
+def train_one_epoch(model, loader, optimizer, criterion, device, scheduler=None, batch_normalizer=None, batch_transform=None, amp_enabled=False):
     metric_enabled = getattr(criterion, "metric_enabled", False)
     arcface_enabled = getattr(criterion, "arcface_enabled", False)
-
-    if metric_enabled and arcface_enabled:
-        raise ValueError("Hierarchical metric loss and first-place ArcFace cannot be enabled together.")
+    if metric_enabled and arcface_enabled: raise ValueError("Hierarchical metric loss and first-place ArcFace cannot be enabled together.")
 
     model.train()
-    total_loss = 0.0
-    total_correct = 0
-    total_samples = 0
+    total_loss = total_correct = total_samples = 0
     pbar = tqdm(loader, desc="Train", leave=False)
 
     for batch in pbar:
         images = batch["image"].to(device)
         labels = batch["label"].to(device)
         metadata = _prepare_metadata(batch, device)
+        if batch_normalizer is not None: images = batch_normalizer(images, batch)
 
-        if batch_normalizer is not None:
-            images = batch_normalizer(images, batch)
-
-        mixed_images = images
-        targets = labels
-        mixed_metadata = metadata
-
+        mixed_images, targets, mixed_metadata = images, labels, metadata
         if batch_transform is not None:
             mixed_images, targets, mix_info = batch_transform(images, labels)
             mixed_metadata = _prepare_mixed_metadata(metadata, mix_info)
@@ -66,89 +51,77 @@ def train_one_epoch(
         optimizer.zero_grad()
 
         if metric_enabled and batch_transform is not None:
-            _, embeddings = model(images, metadata, return_embeddings=True)
-            metric_loss = criterion.metric_loss(embeddings, labels, batch)
+            with _autocast(device, amp_enabled):
+                _, embeddings = model(images, metadata, return_embeddings=True)
+            metric_loss = criterion.metric_loss(embeddings.float(), labels, batch)
             weighted_metric_loss = criterion.lambda_metric * metric_loss
             weighted_metric_loss.backward()
 
-            outputs = model(mixed_images, mixed_metadata)
-            classification_loss = criterion.classification_loss(outputs, targets)
+            with _autocast(device, amp_enabled):
+                outputs = model(mixed_images, mixed_metadata)
+                classification_loss = criterion.classification_loss(outputs, targets)
             classification_loss.backward()
-
             loss = classification_loss.detach() + weighted_metric_loss.detach()
 
         elif metric_enabled:
-            outputs, embeddings = model(images, metadata, return_embeddings=True)
-            loss = criterion(outputs, labels, embeddings, batch)
+            with _autocast(device, amp_enabled):
+                outputs, embeddings = model(images, metadata, return_embeddings=True)
+                classification_loss = criterion.classification_loss(outputs, labels)
+            metric_loss = criterion.metric_loss(embeddings.float(), labels, batch)
+            loss = classification_loss + criterion.lambda_metric * metric_loss
             loss.backward()
 
         elif arcface_enabled:
-            outputs, arc_logits = model(mixed_images, mixed_metadata, return_arc_logits=True)
-            loss = criterion(outputs, targets, arc_logits)
+            with _autocast(device, amp_enabled):
+                outputs, arc_logits = model(mixed_images, mixed_metadata, return_arc_logits=True)
+                loss = criterion(outputs, targets, arc_logits)
             loss.backward()
 
         else:
-            outputs = model(mixed_images, mixed_metadata)
-            loss = criterion(outputs, targets)
+            with _autocast(device, amp_enabled):
+                outputs = model(mixed_images, mixed_metadata)
+                loss = criterion(outputs, targets)
             loss.backward()
 
         optimizer.step()
-
-        if scheduler is not None:
-            scheduler.step()
+        if scheduler is not None: scheduler.step()
 
         batch_size = labels.size(0)
         total_loss += loss.item() * batch_size
         if targets.ndim == 2:
-            probabilities = outputs.detach().softmax(dim=1)
-            match = 1.0 - 0.5 * (probabilities - targets).abs().sum(dim=1)
+            probabilities = outputs.detach().float().softmax(dim=1)
+            match = 1.0 - 0.5 * (probabilities - targets.float()).abs().sum(dim=1)
             total_correct += match.clamp(0.0, 1.0).sum().item()
         else:
             total_correct += (outputs.argmax(dim=1) == targets).sum().item()
 
         total_samples += batch_size
-        pbar.set_postfix(
-            loss=f"{total_loss / total_samples:.4f}",
-            acc=f"{total_correct / total_samples:.4f}",
-        )
+        pbar.set_postfix(loss=f"{total_loss / total_samples:.4f}", acc=f"{total_correct / total_samples:.4f}")
 
     return total_loss / total_samples, total_correct / total_samples
-
 @torch.no_grad()
-def validate_one_epoch(model, loader, criterion, device, batch_normalizer=None):
+def validate_one_epoch(model, loader, criterion, device, batch_normalizer=None, amp_enabled=False):
     model.eval()
-
-    total_loss = 0.0
-    total_correct = 0
-    total_samples = 0
-
+    total_loss = total_correct = total_samples = 0
     pbar = tqdm(loader, desc="Val", leave=False)
 
     for batch in pbar:
         images = batch["image"].to(device)
         labels = batch["label"].to(device)
         metadata = _prepare_metadata(batch, device)
+        if batch_normalizer is not None: images = batch_normalizer(images, batch)
 
-        if batch_normalizer is not None:
-            images = batch_normalizer(images, batch)
-
-        outputs = model(images, metadata)
-        loss = criterion(outputs, labels)
+        with _autocast(device, amp_enabled):
+            outputs = model(images, metadata)
+            loss = criterion(outputs, labels)
 
         batch_size = labels.size(0)
-
         total_loss += loss.item() * batch_size
-
         total_correct += (outputs.argmax(dim=1) == labels).sum().item()
-
         total_samples += batch_size
+        pbar.set_postfix(loss=f"{total_loss / total_samples:.4f}", acc=f"{total_correct / total_samples:.4f}")
 
-        pbar.set_postfix(
-            loss=(f"{total_loss / total_samples:.4f}"), acc=(f"{total_correct / total_samples:.4f}")
-        )
-
-    return (total_loss / total_samples, total_correct / total_samples)
-
+    return total_loss / total_samples, total_correct / total_samples
 
 def fit_model(
     model, train_loader, val_loader, optimizer, criterion, device, epochs,
@@ -156,6 +129,7 @@ def fit_model(
     train_batch_normalizer=None, val_batch_normalizer=None, epoch_callback=None,
     train_batch_transform=None, last_checkpoint_path=None, start_epoch=0,
     stop_after_epoch=None, train_acc_checkpoint_config=None,
+    amp_enabled=False,
 ):
     if epochs <= 0: raise ValueError(f"epochs must be greater than 0, got {epochs}")
     if start_epoch < 0 or start_epoch >= epochs: raise ValueError(f"Invalid start_epoch={start_epoch} for epochs={epochs}")
@@ -178,11 +152,14 @@ def fit_model(
         train_loss, train_acc = train_one_epoch(
             model, train_loader, optimizer, criterion, device,
             scheduler=scheduler, batch_normalizer=train_batch_normalizer,
-            batch_transform=train_batch_transform,
+            batch_transform=train_batch_transform, amp_enabled=amp_enabled,
         )
 
         if validation_enabled:
-            val_loss, val_acc = validate_one_epoch(model, val_loader, criterion, device, batch_normalizer=val_batch_normalizer)
+            val_loss, val_acc = validate_one_epoch(
+                model, val_loader, criterion, device,
+                batch_normalizer=val_batch_normalizer, amp_enabled=amp_enabled,
+            )
         else:
             val_loss, val_acc = None, None
 

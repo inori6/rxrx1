@@ -46,6 +46,9 @@ scheduler:
 
 training:
   validation: false
+  amp:
+    enabled: true
+    dtype: bf16
   epochs: 35
   stop_after_epoch: 7
   resume_from: null

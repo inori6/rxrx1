@@ -68,6 +68,14 @@ def run_training(config, epoch_callback=None):
         training_config = config.get("training") or {}
         validation_enabled = bool(training_config.get("validation", True))
 
+        amp_config = training_config.get("amp") or {}
+        amp_enabled = bool(amp_config.get("enabled", False))
+        amp_dtype = str(amp_config.get("dtype", "bf16")).lower()
+        if amp_enabled and amp_dtype != "bf16": raise ValueError(f"Unsupported AMP dtype: {amp_dtype}")
+        if amp_enabled and device.type == "cuda" and not torch.cuda.is_bf16_supported(): raise RuntimeError(
+            "CUDA device does not support BF16.")
+        logger.info("AMP | enabled=%s | dtype=%s", amp_enabled, amp_dtype if amp_enabled else "fp32")
+
         train_manifest = read_manifest(project_root / config["data"]["train_manifest"])
 
         if validation_enabled:
@@ -251,6 +259,7 @@ def run_training(config, epoch_callback=None):
             start_epoch=start_epoch,
             stop_after_epoch=training_config.get("stop_after_epoch"),
             train_acc_checkpoint_config=training_config.get("train_acc_checkpoint"),
+            amp_enabled=amp_enabled,
         )
 
         log_training_finished(logger, results)
