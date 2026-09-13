@@ -49,11 +49,22 @@ training:
   amp:
     enabled: true
     dtype: bf16
-  epochs: 35
-  stop_after_epoch: 7
-  resume_from: null
-  train_acc_checkpoint:
+  epochs: 70
+  stop_after_epoch: null
+  resume_from: outputs/checkpoints/final_select_aggressive/last.pt
+  adaptive:
     enabled: true
+    window_epochs: 5
+    speed_ratio_threshold: 0.60
+    acc_plateau_delta: 0.005
+    loss_plateau_rel: 0.005
+    confirmation_epochs: 5
+    force_decay_last_epochs: 10
+  snapshot_checkpoint:
+    dense_threshold: 0.50
+    sparse_interval: 5
+  train_acc_checkpoint:
+    enabled: false
     threshold: 0.90
 
 normalization:

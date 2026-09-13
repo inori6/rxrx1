@@ -15,6 +15,7 @@ from rxrx1.models.factory import build_model
 from rxrx1.training.criterion import build_criterion
 from rxrx1.training.optimizers import build_optimizer
 from rxrx1.training.schedulers import build_scheduler
+from rxrx1.training.adaptive import AdaptiveContinuationScheduler, AdaptiveTrainingController
 from rxrx1.training.trainer import fit_model
 from rxrx1.training.checkpoint import load_checkpoint
 from rxrx1.training.validation import filter_and_validate_val_manifest
@@ -198,19 +199,22 @@ def run_training(config, epoch_callback=None):
         criterion = criterion.to(device)
         optimizer = build_optimizer(model, config)
 
-        scheduler = build_scheduler(
-            optimizer=optimizer,
-            config=config,
-            epochs=training_config["epochs"],
-            steps_per_epoch=len(train_loader),
-        )
-
         checkpoint_dir = project_root / config["checkpoint"]["dir"] / config["experiment"]["name"]
         best_checkpoint_path = checkpoint_dir / "best.pt"
         last_checkpoint_path = checkpoint_dir / "last.pt"
 
         start_epoch = 0
+        resume_training_state = {}
         resume_from = training_config.get("resume_from")
+        adaptive_config = training_config.get("adaptive") or {}
+        adaptive_enabled = bool(adaptive_config.get("enabled", False))
+        scheduler = None if adaptive_enabled else build_scheduler(
+            optimizer=optimizer,
+            config=config,
+            epochs=training_config["epochs"],
+            steps_per_epoch=len(train_loader),
+        )
+        ckpt = None
 
         if resume_from:
             resume_path = project_root / resume_from
@@ -222,14 +226,46 @@ def run_training(config, epoch_callback=None):
                 total_epochs=training_config["epochs"],
                 steps_per_epoch=len(train_loader),
                 device=device,
+                allow_total_epochs_mismatch=adaptive_enabled,
             )
             start_epoch = int(ckpt["epoch"])
+            resume_training_state = ckpt.get("training_state") or {}
             logger.info(
                 "Resumed checkpoint | path=%s | completed_epoch=%d | next_epoch=%d",
                 resume_path,
                 start_epoch,
                 start_epoch + 1,
             )
+
+        adaptive_controller = None
+        if adaptive_enabled:
+            scheduler = AdaptiveContinuationScheduler(
+                optimizer=optimizer,
+                total_epochs=training_config["epochs"],
+                steps_per_epoch=len(train_loader),
+                min_lr_ratio=float((config.get("scheduler") or {}).get("min_lr_ratio", 0.01)),
+            )
+            controller_state = resume_training_state.get("adaptive_controller")
+            adaptive_controller = AdaptiveTrainingController(
+                adaptive_config, max_epochs=training_config["epochs"],
+            )
+            if controller_state is not None:
+                adaptive_controller.load_state_dict(controller_state)
+                if ckpt is None or ckpt.get("scheduler_state_dict") is None:
+                    raise ValueError("Adaptive resume checkpoint is missing scheduler state.")
+                scheduler.load_state_dict(ckpt["scheduler_state_dict"])
+                logger.info(
+                    "Adaptive scheduler/controller restored | phase=%.6f | next_mode=%s",
+                    scheduler.phase,
+                    adaptive_controller.next_mode,
+                )
+            else:
+                logger.info(
+                    "Adaptive continuation initialized | completed_epoch=%d | phase=%.6f | current_lrs=%s",
+                    start_epoch,
+                    scheduler.phase,
+                    scheduler.get_last_lr(),
+                )
 
         log_training_started(
             logger,
@@ -260,6 +296,9 @@ def run_training(config, epoch_callback=None):
             stop_after_epoch=training_config.get("stop_after_epoch"),
             train_acc_checkpoint_config=training_config.get("train_acc_checkpoint"),
             amp_enabled=amp_enabled,
+            adaptive_controller=adaptive_controller,
+            snapshot_config=training_config.get("snapshot_checkpoint"),
+            resume_training_state=resume_training_state,
         )
 
         log_training_finished(logger, results)

@@ -2,6 +2,7 @@ from pathlib import Path
 
 import wandb
 
+
 def setup_wandb(config: dict, project_root: Path):
     wandb_config = config.get("wandb", {})
 
@@ -18,11 +19,8 @@ def setup_wandb(config: dict, project_root: Path):
 
     return run
 
-def update_wandb_git_info(
-    run,
-    git_commit,
-    git_ref,
-):
+
+def update_wandb_git_info(run, git_commit, git_ref):
     if run is None:
         return
 
@@ -35,8 +33,19 @@ def update_wandb_git_info(
     )
 
 
-def log_wandb_epoch(run, epoch, train_loss, train_acc, val_loss, val_acc, runtime_minutes):
-    if run is None: return
+def log_wandb_epoch(
+    run,
+    epoch,
+    train_loss,
+    train_acc,
+    val_loss,
+    val_acc,
+    runtime_minutes,
+    extra_metrics=None,
+):
+    if run is None:
+        return
+
     data = {
         "epoch": epoch,
         "train/loss": train_loss,
@@ -46,10 +55,14 @@ def log_wandb_epoch(run, epoch, train_loss, train_acc, val_loss, val_acc, runtim
     if val_acc is not None:
         data["val/loss"] = val_loss
         data["val/acc"] = val_acc
+    if extra_metrics:
+        data.update(extra_metrics)
     run.log(data)
 
+
 def finish_wandb(run, results):
-    if run is None: return
+    if run is None:
+        return
 
     summary = {
         "final_train_acc": results.final_train_acc,
@@ -70,6 +83,7 @@ def finish_wandb(run, results):
 
     run.summary.update(summary)
     run.finish()
+
 
 def fail_wandb(run):
     if run is None:

@@ -3,7 +3,8 @@ import time
 from tqdm import tqdm
 import torch
 
-from rxrx1.training.checkpoint import save_checkpoint
+from rxrx1.training.checkpoint import save_checkpoint, save_model_snapshot
+from rxrx1.training.adaptive import snapshot_optimizer_parameters, calculate_group_update_metrics
 from rxrx1.training.experiment import TrainingResults
 from rxrx1.utils.logger import log_epoch_result, log_best_checkpoint
 from rxrx1.utils.tracking import log_wandb_epoch
@@ -129,7 +130,8 @@ def fit_model(
     train_batch_normalizer=None, val_batch_normalizer=None, epoch_callback=None,
     train_batch_transform=None, last_checkpoint_path=None, start_epoch=0,
     stop_after_epoch=None, train_acc_checkpoint_config=None,
-    amp_enabled=False,
+    amp_enabled=False, adaptive_controller=None, snapshot_config=None,
+    resume_training_state=None,
 ):
     if epochs <= 0: raise ValueError(f"epochs must be greater than 0, got {epochs}")
     if start_epoch < 0 or start_epoch >= epochs: raise ValueError(f"Invalid start_epoch={start_epoch} for epochs={epochs}")
@@ -142,12 +144,39 @@ def fit_model(
     acc_cfg = train_acc_checkpoint_config or {}
     save_by_acc = bool(acc_cfg.get("enabled", False))
     acc_threshold = float(acc_cfg.get("threshold", 1.0))
+    snapshot_cfg = snapshot_config or {}
+    dense_threshold = float(snapshot_cfg.get("dense_threshold", 0.50))
+    sparse_interval = int(snapshot_cfg.get("sparse_interval", 5))
+    if sparse_interval <= 0: raise ValueError("snapshot sparse_interval must be greater than zero.")
+    restored_state = resume_training_state or {}
+    dense_started = bool(restored_state.get("dense_checkpointing_started", False))
+
+    def current_training_state():
+        return {
+            "adaptive_controller": (
+                adaptive_controller.state_dict() if adaptive_controller is not None else None
+            ),
+            "dense_checkpointing_started": dense_started,
+        }
 
     for epoch in tqdm(range(start_epoch, epochs), desc="Epoch"):
         epoch_number = epoch + 1
         start = time.perf_counter()
 
         if hasattr(train_loader.batch_sampler, "set_epoch"): train_loader.batch_sampler.set_epoch(epoch)
+        if scheduler is not None and hasattr(scheduler, "begin_epoch"):
+            scheduler_mode = adaptive_controller.next_mode if adaptive_controller is not None else "decay"
+            scheduler.begin_epoch(epoch_number, scheduler_mode)
+
+        if adaptive_controller is not None:
+            start_lrs = {
+                str(group.get("group_name", f"group_{index}")): float(group["lr"])
+                for index, group in enumerate(optimizer.param_groups)
+            }
+            parameter_snapshot = snapshot_optimizer_parameters(optimizer)
+        else:
+            start_lrs = None
+            parameter_snapshot = None
 
         train_loss, train_acc = train_one_epoch(
             model, train_loader, optimizer, criterion, device,
@@ -163,19 +192,63 @@ def fit_model(
         else:
             val_loss, val_acc = None, None
 
+        if adaptive_controller is not None:
+            update_metrics = calculate_group_update_metrics(
+                optimizer, parameter_snapshot, start_lrs,
+            )
+            adaptive_metrics = adaptive_controller.update(
+                epoch_number, train_acc, train_loss,
+            )
+        else:
+            update_metrics = {}
+            adaptive_metrics = {}
+
         runtime = time.perf_counter() - start
         epoch_runtimes.append(runtime)
         is_best = results.update_epoch(epoch_number, train_loss, train_acc, val_loss, val_acc)
 
         log_epoch_result(logger, epoch_number, train_loss, train_acc, val_loss, val_acc, runtime / 60)
-        log_wandb_epoch(run, epoch_number, train_loss, train_acc, val_loss, val_acc, runtime / 60)
+        log_wandb_epoch(
+            run, epoch_number, train_loss, train_acc, val_loss, val_acc, runtime / 60,
+            extra_metrics={**update_metrics, **adaptive_metrics},
+        )
+
+        if adaptive_controller is not None:
+            logger.info(
+                "Adaptive | epoch=%d | state=%s | next_mode=%s | confirm_remaining=%d | stop=%s",
+                epoch_number,
+                adaptive_controller.state,
+                adaptive_controller.next_mode,
+                adaptive_controller.confirm_remaining,
+                adaptive_controller.should_stop,
+            )
+
+        if train_acc >= dense_threshold:
+            dense_started = True
 
         if checkpoint_enabled and last_checkpoint_path is not None:
             save_checkpoint(
                 model, optimizer, epoch_number, last_checkpoint_path,
                 scheduler=scheduler, val_acc=val_acc,
                 total_epochs=epochs, steps_per_epoch=len(train_loader),
+                training_state=current_training_state(),
             )
+
+        if checkpoint_enabled and last_checkpoint_path is not None:
+            should_snapshot = dense_started or epoch_number % sparse_interval == 0
+            if should_snapshot:
+                snapshot = (
+                    last_checkpoint_path.parent / "model_snapshots"
+                    / f"epoch_{epoch_number:02d}_trainacc_{train_acc:.4f}.pt"
+                )
+                save_model_snapshot(
+                    model, epoch_number, snapshot,
+                    train_loss=train_loss, train_acc=train_acc,
+                )
+                logger.info(
+                    "Model snapshot saved | epoch=%d | train_acc=%.4f | dense=%s | path=%s",
+                    epoch_number, train_acc, dense_started, snapshot,
+                )
 
         if checkpoint_enabled and save_by_acc and train_acc >= acc_threshold and last_checkpoint_path is not None:
             snapshot = last_checkpoint_path.parent / "train_acc_snapshots" / f"epoch_{epoch_number:02d}_trainacc_{train_acc:.4f}.pt"
@@ -183,6 +256,7 @@ def fit_model(
                 model, optimizer, epoch_number, snapshot,
                 scheduler=scheduler, val_acc=val_acc,
                 total_epochs=epochs, steps_per_epoch=len(train_loader),
+                training_state=current_training_state(),
             )
             logger.info("Train-acc checkpoint saved | epoch=%d | train_acc=%.4f | threshold=%.4f | path=%s", epoch_number, train_acc, acc_threshold, snapshot)
 
@@ -191,8 +265,24 @@ def fit_model(
                 model, optimizer, epoch_number, checkpoint_path,
                 scheduler=scheduler, val_acc=val_acc,
                 total_epochs=epochs, steps_per_epoch=len(train_loader),
+                training_state=current_training_state(),
             )
             log_best_checkpoint(logger, epoch_number, val_acc, val_loss)
+
+        if adaptive_controller is not None and adaptive_controller.should_stop:
+            if checkpoint_enabled and last_checkpoint_path is not None:
+                early_stop_path = last_checkpoint_path.parent / "early_stop.pt"
+                save_checkpoint(
+                    model, optimizer, epoch_number, early_stop_path,
+                    scheduler=scheduler, val_acc=val_acc,
+                    total_epochs=epochs, steps_per_epoch=len(train_loader),
+                    training_state=current_training_state(),
+                )
+                logger.info(
+                    "Adaptive early stop | epoch=%d | path=%s",
+                    epoch_number, early_stop_path,
+                )
+            break
 
         if epoch_callback is not None and epoch_callback(epoch_number, train_loss, train_acc, val_loss, val_acc): break
 
