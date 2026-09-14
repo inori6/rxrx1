@@ -604,6 +604,39 @@ def main():
         in label_to_index.items()
     }
 
+    sirna_id_map_path = root / "data/sirna_id_map.csv"
+    if not sirna_id_map_path.exists():
+        raise FileNotFoundError(
+            f"Missing official sirna mapping: {sirna_id_map_path}"
+        )
+
+    sirna_id_df = pd.read_csv(sirna_id_map_path)
+    required = {"sirna", "sirna_id"}
+    missing = required - set(sirna_id_df.columns)
+    if missing:
+        raise ValueError(f"sirna_id_map.csv missing columns: {sorted(missing)}")
+
+    if sirna_id_df["sirna"].duplicated().any():
+        raise ValueError("Duplicate internal sirna labels in sirna_id_map.csv.")
+
+    if sirna_id_df["sirna_id"].duplicated().any():
+        raise ValueError("Duplicate official sirna_id values in sirna_id_map.csv.")
+
+    sirna_to_official = dict(
+        zip(sirna_id_df["sirna"], sirna_id_df["sirna_id"])
+    )
+
+    missing_labels = sorted(set(label_to_index) - set(sirna_to_official))
+    extra_labels = sorted(set(sirna_to_official) - set(label_to_index))
+
+    if missing_labels or extra_labels:
+        raise ValueError(
+            "sirna_id mapping does not match model classes | "
+            f"missing={missing_labels[:10]} extra={extra_labels[:10]}"
+        )
+
+    print(f"Official sirna_id mapping: {len(sirna_to_official)} classes")
+
     # --------------------------------------------------------
     # Build the exact submission target first.
     # --------------------------------------------------------
@@ -920,20 +953,12 @@ def main():
             class_index
         ]
 
-        if (
-            isinstance(label, str)
-            and label.startswith(
-                "sirna_"
-            )
-        ):
-            sirna = int(
-                label.removeprefix(
-                    "sirna_"
-                )
+        if label not in sirna_to_official:
+            raise KeyError(
+                f"No official sirna_id mapping for internal label: {label}"
             )
 
-        else:
-            sirna = int(label)
+        sirna = int(sirna_to_official[label])
 
         predictions[
             id_code
