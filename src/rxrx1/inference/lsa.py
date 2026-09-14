@@ -93,9 +93,9 @@ def apply_lsa(predictions, groups, assignments, label_to_index):
         if key not in assignments:
             raise ValueError(f"No plate-group assignment for {key}.")
 
-        if len(plate_df) != group_size:
+        if len(plate_df) > group_size:
             raise ValueError(
-                f"{key}: expected {group_size} wells, found {len(plate_df)}."
+                f"{key}: expected at most {group_size} wells, found {len(plate_df)}."
             )
 
         candidates = np.asarray(groups[assignments[key]])

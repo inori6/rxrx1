@@ -16,6 +16,7 @@ from rxrx1.data.normalization import (
     fit_normalization_stats,
 )
 from rxrx1.data.transforms import prepare_transforms, resize_image
+from rxrx1.inference.lsa import lsa_predict
 from rxrx1.models.factory import build_model
 
 
@@ -933,36 +934,75 @@ def main():
             f"{extra_predictions[:10]}"
         )
 
+    inference = config.get("inference") or {}
+    lsa_enabled = bool(
+        (inference.get("lsa") or {}).get("enabled", False)
+    )
+
+    well_meta = raw_test[
+        ["id_code", "experiment", "plate"]
+    ].copy()
+    well_meta["id_code"] = well_meta["id_code"].astype(str)
+    well_meta = well_meta.set_index("id_code")
+
+    well_rows = []
+
+    for id_code,total_logits in logit_sums.items():
+        mean_logits = (
+            total_logits / site_counts[id_code]
+        ).numpy()
+
+        row = well_meta.loc[id_code]
+
+        well_rows.append({
+            "id_code": id_code,
+            "experiment": row["experiment"],
+            "plate": int(row["plate"]),
+            "logits": mean_logits,
+        })
+
+    well_predictions = pd.DataFrame(well_rows)
+
+    if lsa_enabled:
+        lsa_submission,assignments = lsa_predict(
+            well_predictions,
+            train_manifest,
+            label_to_index,
+        )
+
+        internal_predictions = dict(
+            zip(
+                lsa_submission["id_code"].astype(str),
+                lsa_submission["sirna"],
+            )
+        )
+
+        print(
+            f"LSA enabled | plate assignments: {len(assignments)}"
+        )
+
+    else:
+        internal_predictions = {}
+
+        for row in well_rows:
+            class_index = int(row["logits"].argmax())
+            internal_predictions[row["id_code"]] = (
+                index_to_label[class_index]
+            )
+
+        print("LSA disabled")
+
     predictions = {}
 
-    for (
-        id_code,
-        total_logits,
-    ) in logit_sums.items():
-
-        mean_logits = (
-            total_logits
-            / site_counts[id_code]
-        )
-
-        class_index = int(
-            mean_logits.argmax()
-        )
-
-        label = index_to_label[
-            class_index
-        ]
-
+    for id_code,label in internal_predictions.items():
         if label not in sirna_to_official:
             raise KeyError(
                 f"No official sirna_id mapping for internal label: {label}"
             )
 
-        sirna = int(sirna_to_official[label])
-
-        predictions[
-            id_code
-        ] = sirna
+        predictions[id_code] = int(
+            sirna_to_official[label]
+        )
 
     submission = (
         sample[["id_code"]]
