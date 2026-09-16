@@ -1,6 +1,7 @@
 from functools import partial
 from pathlib import Path
 import argparse
+import os
 
 import pandas as pd
 import torch
@@ -17,6 +18,7 @@ from rxrx1.data.normalization import (
 )
 from rxrx1.data.transforms import prepare_transforms, resize_image
 from rxrx1.inference.lsa import lsa_predict
+from rxrx1.inference.tta import tta_logits
 from rxrx1.models.factory import build_model
 
 
@@ -803,6 +805,15 @@ def main():
     logit_sums = {}
     site_counts = {}
 
+    inference = config.get("inference") or {}
+    tta_config = inference.get("tta") or {}
+    tta_enabled = bool(tta_config.get("enabled", False))
+    tta_mode = str(tta_config.get("mode", "d4"))
+
+    print(f"TTA:        {tta_enabled}")
+    if tta_enabled:
+        print(f"TTA mode:   {tta_mode}")
+
     amp_enabled = (
         device.type == "cuda"
     )
@@ -858,19 +869,27 @@ def main():
                 dtype=amp_dtype,
                 enabled=amp_enabled,
             ):
-                outputs = model(
-                    images,
-                    metadata,
-                )
-
-                logits = (
-                    outputs[0]
-                    if isinstance(
-                        outputs,
-                        tuple,
+                if tta_enabled:
+                    logits = tta_logits(
+                        model,
+                        images,
+                        metadata=metadata,
+                        mode=tta_mode,
                     )
-                    else outputs
-                )
+                else:
+                    outputs = model(
+                        images,
+                        metadata,
+                    )
+
+                    logits = (
+                        outputs[0]
+                        if isinstance(
+                            outputs,
+                            tuple,
+                        )
+                        else outputs
+                    )
 
             logits = (
                 logits
@@ -962,6 +981,12 @@ def main():
         })
 
     well_predictions = pd.DataFrame(well_rows)
+
+    cache_path = os.environ.get("RXRX1_SAVE_WELL_LOGITS")
+    if cache_path:
+        Path(cache_path).parent.mkdir(parents=True, exist_ok=True)
+        well_predictions.to_pickle(cache_path)
+        print(f"Saved well logits: {cache_path}")
 
     if lsa_enabled:
         lsa_submission,assignments = lsa_predict(

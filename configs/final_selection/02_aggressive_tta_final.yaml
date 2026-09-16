@@ -1,0 +1,142 @@
+experiment:
+  name: final_select_aggressive
+  seed: 0
+data:
+  train_manifest: data/processed/splits/full_all_treatment.csv
+  train_control_manifest: data/processed/splits/full_all_control.csv
+  image_size: 512
+  batch_size: 32
+  num_workers: 4
+  shuffle_train: true
+  pk_sampler:
+    enabled: true
+    k: 4
+model:
+  name: efficientnet_b4_metric_neck
+  pretrained: false
+  dropout: 0.27
+  embedding_size: 1024
+  bn_momentum: 0.05
+  neck_layers: 1
+  metadata:
+    enabled: true
+    method: concat
+    cell_type: true
+    well_position: true
+    num_cell_types: 4
+    well_dim: 2
+loss:
+  name: cross_entropy
+optimizer:
+  name: adamw
+  base_lr: 6.0e-05
+  weight_decay: 0.00016
+  lr_ratio:
+  - 1.0
+  - 4.3
+  - 8.0
+  - 31.0
+  neck_lr_ratio: 14.5
+  fusion_lr_ratio: 2.8
+scheduler:
+  name: cosine
+  warmup_ratio: 0.05
+  min_lr_ratio: 0.01
+training:
+  validation: false
+  amp:
+    enabled: true
+    dtype: bf16
+  epochs: 70
+  stop_after_epoch: null
+  resume_from: outputs/checkpoints/final_select_aggressive/last.pt
+  adaptive:
+    enabled: true
+    window_epochs: 5
+    speed_ratio_threshold: 0.6
+    acc_plateau_delta: 0.005
+    loss_plateau_rel: 0.005
+    confirmation_epochs: 5
+    force_decay_last_epochs: 10
+  snapshot_checkpoint:
+    dense_threshold: 0.5
+    sparse_interval: 5
+  train_acc_checkpoint:
+    enabled: false
+    threshold: 0.9
+normalization:
+  enabled: true
+  method: zscore
+  eps: 1.0e-06
+  missing_group: error
+  reference:
+    population: NP
+    split_policy: train_only
+  statistics:
+    source: reference
+    grouping: global
+    spatial: global
+    channel: shared
+    std_type: population
+  application:
+    position: before_resize
+  cache:
+    dir: outputs/normalization_stats/final_full
+    load: true
+    save: true
+    missing: compute
+transform:
+  switch: true
+  train:
+  - name: resize
+    size: 512
+  - name: horizontal_flip
+    p: 0.5
+  - name: vertical_flip
+    p: 0.5
+  - name: random_90_rotation
+    p: 1.0
+  - name: channel_intensity_jitter
+    scale_mean: 1.0
+    scale_std: 0.075
+    shift_mean: 0.0
+    shift_std: 0.075
+    p: 1.0
+  - name: channel_dropout
+    p: 0.15
+    max_channels: 1
+  val:
+  - name: resize
+    size: 512
+  batch:
+  - name: cutmix
+    alpha: 1.0
+    p: 1.0
+metric:
+  enabled: true
+  lambda_metric: 0.052
+  wt: 0.63
+  wc: 0.37
+  alpha: 0.92
+  min_pairs: 8
+  projection_dims:
+  - 512
+  - 128
+checkpoint:
+  enabled: true
+  dir: outputs/checkpoints
+logging:
+  level: INFO
+  log_dir: outputs/logs
+wandb:
+  enabled: true
+  project: rxrx1
+  mode: online
+  dir: outputs
+inference:
+  site_aggregation: mean_logits
+  tta:
+    enabled: true
+    mode: d4
+  lsa:
+    enabled: false
