@@ -36,6 +36,16 @@ def parse_args():
     p.add_argument("--checkpoint", required=True)
     p.add_argument("--output", required=True)
     p.add_argument(
+        "--raw-output",
+        default=None,
+        help="Optional RAW submission from the same well logits before LSA.",
+    )
+    p.add_argument(
+        "--logits-output",
+        default=None,
+        help="Optional pickle containing aggregated RAW well logits.",
+    )
+    p.add_argument(
         "--norm-stats-source",
         choices=("train", "test"),
         default="train",
@@ -982,11 +992,97 @@ def main():
 
     well_predictions = pd.DataFrame(well_rows)
 
-    cache_path = os.environ.get("RXRX1_SAVE_WELL_LOGITS")
+
+
+
+    # RAW submission from the exact same logits passed to LSA.
+
+    if args.raw_output:
+
+        raw_internal_predictions={}
+
+
+        for row in well_rows:
+
+            class_index=int(row["logits"].argmax())
+
+            raw_internal_predictions[row["id_code"]]=index_to_label[class_index]
+
+
+        raw_predictions={}
+
+
+        for id_code,label in raw_internal_predictions.items():
+
+            if label not in sirna_to_official:
+
+                raise KeyError(
+
+                    f"No official sirna_id mapping for internal label: {label}"
+
+                )
+
+
+            raw_predictions[id_code]=int(sirna_to_official[label])
+
+
+        raw_submission=sample[["id_code"]].copy()
+
+
+        raw_submission["sirna"]=(
+
+            raw_submission["id_code"]
+
+            .astype(str)
+
+            .map(raw_predictions)
+
+        )
+
+
+        if raw_submission["sirna"].isna().any():
+
+            missing=raw_submission.loc[
+
+                raw_submission["sirna"].isna(),
+
+                "id_code",
+
+            ].tolist()[:10]
+
+
+            raise RuntimeError(
+
+                f"Missing RAW predictions for: {missing}"
+
+            )
+
+
+        raw_submission["sirna"]=raw_submission["sirna"].astype(int)
+
+
+        raw_output_path=root/args.raw_output
+
+        raw_output_path.parent.mkdir(parents=True,exist_ok=True)
+
+
+        raw_submission.to_csv(raw_output_path,index=False)
+
+
+        print(f"RAW submission: {raw_output_path}")
+
+    cache_path = args.logits_output or os.environ.get(
+        "RXRX1_SAVE_WELL_LOGITS"
+    )
+
     if cache_path:
-        Path(cache_path).parent.mkdir(parents=True, exist_ok=True)
+        cache_path = Path(cache_path)
+        if not cache_path.is_absolute():
+            cache_path = root / cache_path
+
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
         well_predictions.to_pickle(cache_path)
-        print(f"Saved well logits: {cache_path}")
+        print(f"RAW well logits: {cache_path}")
 
     if lsa_enabled:
         lsa_submission,assignments = lsa_predict(
