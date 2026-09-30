@@ -328,10 +328,12 @@ RAW prediction == LSA prediction
 
 It contained **6,729 / 19,897 wells** (about **33.8%** of test wells). Pseudo-samples were trained with real data while retaining PK sampling.
 
-- Stages 1–3 added the most reliable high-confidence, LSA-consistent samples;
-- the updated model re-predicted the remaining samples;
-- Stages 4–9 expanded from higher to lower confidence while requiring LSA consistency;
-- Stage 10 introduced difficult RAW/LSA disagreement samples.
+The public curriculum implementation uses the fixed teacher state generated above and adds pseudo-labeled wells cumulatively:
+
+- **Stages 1–6:** remaining RAW/LSA-agreement samples are sorted by confidence and added from higher to lower confidence;
+- **Stages 7–10:** RAW/LSA-disagreement samples are then sorted by confidence and added progressively;
+- every stage retains all pseudo-labeled wells introduced in earlier stages;
+- training uses mixed real/pseudo PK sampling, with one pseudo observation per selected treatment when available.
 
 | Stage | Public | Private | Interpretation |
 |---|---:|---:|---|
