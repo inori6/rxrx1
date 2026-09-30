@@ -108,15 +108,9 @@ lightning_logs/
 PROJECT_STRUCTURE.md
 */.stfolder/
 /transform_samples.yaml
-/results/analysis/
 scripts/*.ps1
-<<<<<<< Updated upstream
-
 # Backup variants
 *.bak_*
-=======
-kaggle/
-tests/
+
 # Generated analysis results
 /results/
->>>>>>> Stashed changes
