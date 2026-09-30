@@ -1,7 +1,7 @@
 [project]
 name = "rxrx1"
 version = "0.1.0"
-description = "Add your description here"
+description = "Biology-guided modeling of six-channel microscopy images for cross-experiment siRNA classification"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -26,9 +26,6 @@ dependencies = [
     "tqdm>=4.70.0",
     "wandb>=0.29.0",
 ]
-
-[project.scripts]
-rxrx1 = "rxrx1:main"
 
 [build-system]
 requires = ["uv_build>=0.12.7,<0.13.0"]

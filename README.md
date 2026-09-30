@@ -475,7 +475,7 @@ The test entry point supports site-mean aggregation, D4 TTA, optional plate-awar
 
 ```bash
 uv run python scripts/predict_test_submit.py \
-  --config configs/final_selection/02_aggressive_epoch46_raw.yaml \
+  --config configs/final_selection/02_aggressive_raw_infer.yaml \
   --checkpoint outputs/checkpoints/<run>/last.pt \
   --output outputs/submission.csv
 ```
@@ -561,7 +561,7 @@ rxrx1/
 │   ├── final_selection/ # production and inference variants
 │   └── pseudo/          # round 1, curriculum, and consolidation configs
 ├── data/              # manifests / processed metadata / local data layout
-├── kaggle/            # Kaggle train / HPO runner and kernel metadata
+├── kaggle/            # Kaggle runner and kernel-metadata template
 ├── notebooks/         # exploratory analysis
 ├── scripts/
 │   ├── train.py

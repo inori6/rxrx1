@@ -1,2 +1,1 @@
-def main() -> None:
-    print("Hello from rxrx1!")
+"""RxRx1 cellular perturbation classification package."""
