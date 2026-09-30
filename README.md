@@ -382,7 +382,7 @@ LSA is a **competition- and experimental-design-specific strong prior**, not a g
 | Stage 10 + LSA | 0.80185 | 0.97736 | Main plate-level constraint gain |
 | **Stage 10 + TTA + LSA** | **0.81132** | **0.97903** | **Best submission** |
 
-These are historical submission records; `results/experiments.csv` does not archive them or their checkpoint lineage. TTA adds Public `+0.00406` and Private `+0.00536`; LSA adds substantially more. The final score combines **core modeling**, **target-domain pseudo-labeling**, and a **competition-specific inference prior**.
+These values come from historical submission records; submission files, generated logits, checkpoints, and their full lineage are not distributed. TTA adds Public `+0.00406` and Private `+0.00536`; LSA adds substantially more. The final score combines **core modeling**, **target-domain pseudo-labeling**, and a **competition-specific inference prior**.
 
 ---
 
@@ -561,10 +561,8 @@ rxrx1/
 │   ├── final_selection/ # production and inference variants
 │   └── pseudo/          # round 1, curriculum, and consolidation configs
 ├── data/              # manifests / processed metadata / local data layout
-├── docs/              # development notes
 ├── kaggle/            # Kaggle train / HPO runner and kernel metadata
 ├── notebooks/         # exploratory analysis
-├── results/           # experiment summaries and outputs
 ├── scripts/
 │   ├── train.py
 │   ├── train_pseudo_curriculum.py
