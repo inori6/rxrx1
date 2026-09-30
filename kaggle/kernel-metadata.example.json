@@ -1,5 +1,5 @@
 {
-  "id": "inori6/rxrx1-train",
+  "id": "YOUR_KAGGLE_USERNAME/rxrx1-train",
   "title": "rxrx1 train",
   "code_file": "run.py",
   "language": "python",
@@ -8,9 +8,7 @@
   "enable_gpu": true,
   "enable_internet": true,
   "machine_shape": "NvidiaTeslaT4",
-  "dataset_sources": [
-  "inori6/rxrx1-wandb-secret"
-],
+  "dataset_sources": [],
   "competition_sources": [
     "recursion-cellular-image-classification"
   ]

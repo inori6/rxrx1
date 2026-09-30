@@ -17,7 +17,7 @@ GIT_REF = "master"
 RUN_MODE = "train"
 
 CONFIGS = [
-    "configs/metric/hierarchical_metric_trial16_neck_d2.yaml"
+    "configs/model_baseline.yaml"
 ]
 
 HPO_SCRIPT = "scripts/hpo_fusion.py"
@@ -26,12 +26,9 @@ HPO_TIMEOUT_HOURS = 5.5
 HPO_MAX_TRIALS = 10
 
 WORK_DIR = Path("/kaggle/working")
-PROJECT_DIR = WORK_DIR / "rxrx1-compare_with_1st"
+PROJECT_DIR = WORK_DIR / "rxrx1"
 
-WANDB_KEY_CANDIDATES = [
-    Path("/kaggle/input/datasets/maributa/rxrx1-wandb-secret/wandb_api_key.txt"),
-    Path("/kaggle/input/rxrx1-wandb-secret/wandb_api_key.txt"),
-]
+WANDB_KEY_PATH = os.environ.get("WANDB_KEY_PATH")
 
 
 def section(title):
@@ -44,17 +41,27 @@ def run(command, *, cwd=PROJECT_DIR, check=True):
 
 
 def setup_wandb_key():
-    paths = [path for path in WANDB_KEY_CANDIDATES if path.is_file()]
-    if len(paths) != 1:
-        raise RuntimeError(
-            f"Expected exactly one W&B key; found {len(paths)}. "
-            f"Checked: {WANDB_KEY_CANDIDATES}"
+    if os.environ.get("WANDB_API_KEY"):
+        print("W&B API key loaded from WANDB_API_KEY.", flush=True)
+        return
+
+    if not WANDB_KEY_PATH:
+        print(
+            "WANDB_API_KEY / WANDB_KEY_PATH not set; continuing without W&B authentication.",
+            flush=True,
         )
-    key = paths[0].read_text(encoding="utf-8").strip()
+        return
+
+    path = Path(WANDB_KEY_PATH)
+    if not path.is_file():
+        raise FileNotFoundError(f"W&B API key file not found: {path}")
+
+    key = path.read_text(encoding="utf-8").strip()
     if not key:
-        raise RuntimeError(f"W&B API key file is empty: {paths[0]}")
+        raise RuntimeError(f"W&B API key file is empty: {path}")
+
     os.environ["WANDB_API_KEY"] = key
-    print(f"W&B key loaded from: {paths[0]}", flush=True)
+    print("W&B API key loaded from WANDB_KEY_PATH.", flush=True)
 
 
 def prepare_repository():

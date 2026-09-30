@@ -114,3 +114,6 @@ scripts/*.ps1
 
 # Generated analysis results
 /results/
+
+# Local Kaggle kernel metadata
+kaggle/kernel-metadata.json
