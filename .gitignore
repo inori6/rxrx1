@@ -110,3 +110,6 @@ PROJECT_STRUCTURE.md
 /transform_samples.yaml
 /results/analysis/
 scripts/*.ps1
+
+# Backup variants
+*.bak_*
